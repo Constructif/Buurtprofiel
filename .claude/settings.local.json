@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(test:*)",
+      "Bash(npm create:*)",
+      "Bash(npm install:*)",
+      "Bash(npx tailwindcss:*)",
+      "Bash(node:*)",
+      "Bash(npm run dev:*)",
+      "Bash(npx tsc:*)",
+      "Bash(npm run build:*)",
+      "Bash(type:*)",
+      "Bash(Get-Content \"c:\\Users\\rajco\\OneDrive\\Documenten\\Claude code\\Buurtprofiel\\dashboard\\dist\\assets\\*.css\" -TotalCount 200)",
+      "Bash(git init:*)",
+      "Bash(git add:*)"
+    ]
+  }
+}

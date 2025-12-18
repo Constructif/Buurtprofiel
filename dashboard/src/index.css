@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+@theme {
+  /* Constructif huisstijl kleuren */
+  --color-primary: #eb6608;
+  --color-primary-dark: #1d1d1b;
+  --color-primary-soft: #fff6ee;
+  --color-accent: #eb6608;
+  --color-accent-soft: #fff6ee;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f5f1ee;
+  --color-danger: #c0392b;
+  --color-success: #1f7a4d;
+
+  --animate-fadeIn: fadeIn 0.2s ease-out;
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "Roboto", sans-serif;
+  background: #f4f5f7;
+  color: #1f2933;
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Leaflet fixes */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Spin animation */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
