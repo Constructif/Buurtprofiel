@@ -9,14 +9,13 @@ export function MainTabs() {
   ] as const;
 
   return (
-    <div style={{ display: 'flex', gap: '8px' }}>
+    <div className="main-tabs" style={{ display: 'flex', gap: '8px' }}>
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => setMainTab(tab.id)}
           style={{
             padding: '12px 24px',
-            borderRadius: '0',
             fontWeight: 600,
             fontSize: '14px',
             cursor: 'pointer',

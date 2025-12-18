@@ -52,3 +52,213 @@ body {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
 }
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Hide scrollbar for horizontal scroll areas */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Touch-friendly tap targets */
+@media (max-width: 768px) {
+  /* Prevent zoom on input focus (iOS) */
+  input, select, textarea {
+    font-size: 16px;
+  }
+}
+
+/* Safe area insets for notched devices */
+@supports (padding: max(0px)) {
+  .safe-area-inset {
+    padding-left: max(16px, env(safe-area-inset-left));
+    padding-right: max(16px, env(safe-area-inset-right));
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+  }
+}
+
+/* ==================== MOBILE RESPONSIVE STYLES ==================== */
+
+/* Header mobile */
+@media (max-width: 768px) {
+  .header-container {
+    padding: 0 16px !important;
+  }
+
+  .header-layout {
+    flex-direction: column !important;
+    height: auto !important;
+    padding: 12px 0 !important;
+    gap: 12px !important;
+  }
+
+  .header-search {
+    width: 100% !important;
+    order: 2;
+  }
+
+  .header-title {
+    order: 1;
+  }
+
+  .header-selected {
+    display: none !important;
+  }
+}
+
+/* Main tabs mobile */
+@media (max-width: 768px) {
+  .main-tabs {
+    width: 100%;
+  }
+
+  .main-tabs button {
+    flex: 1;
+    padding: 10px 12px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* Sub tabs mobile - horizontaal scrollen */
+@media (max-width: 768px) {
+  .sub-tabs {
+    margin: 0 -16px;
+    padding: 0 16px;
+  }
+
+  .sub-tabs button {
+    padding: 10px 12px !important;
+    font-size: 12px !important;
+  }
+}
+
+/* Main content mobile */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 12px 16px !important;
+  }
+}
+
+/* Overzicht grid mobile */
+@media (max-width: 1024px) {
+  .overzicht-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .overzicht-map {
+    height: 300px !important;
+    order: 2;
+  }
+
+  .overzicht-stats {
+    order: 1;
+  }
+}
+
+/* Trends grid mobile */
+@media (max-width: 768px) {
+  .trends-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .trends-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Charts grid mobile */
+@media (max-width: 900px) {
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Info grid mobile */
+@media (max-width: 640px) {
+  .info-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Search dropdown mobile */
+@media (max-width: 768px) {
+  .search-dropdown {
+    position: fixed !important;
+    top: auto !important;
+    bottom: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    margin-top: 0 !important;
+    min-width: 100% !important;
+    max-height: 70vh !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  .search-dropdown-content {
+    padding: 20px 16px !important;
+  }
+
+  .search-filters {
+    flex-wrap: wrap;
+    gap: 12px !important;
+  }
+
+  .search-filter-count {
+    display: none;
+  }
+
+  .search-results {
+    max-height: 40vh !important;
+  }
+
+  .search-close-btn {
+    display: block !important;
+    width: 100%;
+    padding: 14px;
+    margin-top: 16px;
+    background: #f3f4f6;
+    border: none;
+    font-weight: 500;
+    cursor: pointer;
+  }
+}
+
+@media (min-width: 769px) {
+  .search-close-btn {
+    display: none !important;
+  }
+}
+
+/* Info grid responsive - 2 columns on tablet */
+@media (min-width: 641px) and (max-width: 900px) {
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+}
+
+/* Charts grid smaller breakpoint */
+@media (max-width: 500px) {
+  .charts-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .charts-grid > div {
+    min-width: 0;
+  }
+}
+
+/* Trends grid smaller screens - 3 columns */
+@media (min-width: 481px) and (max-width: 768px) {
+  .trends-grid {
+    grid-template-columns: repeat(3, 1fr) !important;
+  }
+}

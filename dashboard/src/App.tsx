@@ -40,7 +40,7 @@ function App() {
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f1ee' }}>
       <Header />
 
-      <main style={{ maxWidth: '1800px', margin: '0 auto', padding: '16px 24px' }}>
+      <main className="main-content" style={{ maxWidth: '1800px', margin: '0 auto', padding: '16px 24px' }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           <MainTabs />
           <SubTabs />

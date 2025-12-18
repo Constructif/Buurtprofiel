@@ -82,7 +82,7 @@ export function Bewoners() {
       </Card>
 
       {/* Charts grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
+      <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Leeftijdsverdeling */}
         <Card title="Leeftijdsverdeling" badge="data">
           <div style={{ height: '320px' }}>

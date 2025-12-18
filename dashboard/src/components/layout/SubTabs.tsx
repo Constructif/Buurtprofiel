@@ -22,21 +22,24 @@ export function SubTabs() {
   const tabs = mainTab === 'ruwe-data' ? ruweDataTabs : eigenOnderzoekTabs;
 
   return (
-    <nav style={{
-      display: 'flex',
-      gap: '0',
-      backgroundColor: '#f5f1ee',
-      borderRadius: '0',
-      overflow: 'hidden',
-      borderBottom: '2px solid #e5e7eb'
-    }}>
+    <nav
+      className="sub-tabs scrollbar-hide"
+      style={{
+        display: 'flex',
+        overflowX: 'auto',
+        backgroundColor: '#f5f1ee',
+        borderBottom: '2px solid #e5e7eb',
+        WebkitOverflowScrolling: 'touch',
+        msOverflowStyle: 'none',
+        scrollbarWidth: 'none'
+      }}
+    >
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => setSubTab(tab.id)}
           style={{
-            padding: '12px 20px',
-            borderRadius: '0',
+            padding: '12px 16px',
             fontSize: '14px',
             fontWeight: 500,
             whiteSpace: 'nowrap',
@@ -45,7 +48,8 @@ export function SubTabs() {
             borderBottom: subTab === tab.id ? '3px solid #eb6608' : '3px solid transparent',
             backgroundColor: 'transparent',
             color: subTab === tab.id ? '#1d1d1b' : '#6b7280',
-            marginBottom: '-2px'
+            marginBottom: '-2px',
+            flexShrink: 0
           }}
         >
           {tab.label}

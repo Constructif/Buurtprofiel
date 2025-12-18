@@ -58,14 +58,14 @@ export function Overzicht() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Map + Score + Stats */}
       <section>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '16px', alignItems: 'stretch' }}>
+        <div className="overzicht-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: '16px', alignItems: 'stretch' }}>
           {/* Kaart zonder container */}
-          <div style={{ borderRadius: '8px', overflow: 'hidden', height: '100%' }}>
+          <div className="overzicht-map" style={{ borderRadius: '8px', overflow: 'hidden', height: '100%', minHeight: '400px' }}>
             <BuurtMap />
           </div>
 
           {/* Score + Kernstatistieken */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div className="overzicht-stats" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Buurtscore */}
             <div style={{
               backgroundColor: '#fff',
@@ -112,7 +112,7 @@ export function Overzicht() {
       {/* Trends - placeholder sectie */}
       <section>
         <Card title="Trends - Laatste 3 jaar" badge="placeholder">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px' }}>
+          <div className="trends-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px' }}>
             <TrendCard label="Bevolking" value="-" />
             <TrendCard label="Criminaliteit" value="-" />
             <TrendCard label="Groen" value="-" />

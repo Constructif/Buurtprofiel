@@ -6,28 +6,31 @@ export function Header() {
 
   return (
     <header style={{ backgroundColor: '#eb6608', color: 'white', position: 'sticky', top: 0, zIndex: 50 }}>
-      <div style={{ maxWidth: '1800px', margin: '0 auto', padding: '0 24px' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '24px',
-          height: '56px'
-        }}>
+      <div className="header-container" style={{ maxWidth: '1800px', margin: '0 auto', padding: '0 24px' }}>
+        <div
+          className="header-layout"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '24px',
+            height: '56px'
+          }}
+        >
           {/* Search - links */}
-          <div style={{ width: '320px', flexShrink: 0 }}>
+          <div className="header-search" style={{ width: '320px', flexShrink: 0 }}>
             <GebiedSearch />
           </div>
 
           {/* Titel - midden */}
-          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+          <div className="header-title" style={{ textAlign: 'center', flexShrink: 0 }}>
             <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '0.02em', margin: 0 }}>
               Buurtprofiel
             </h1>
           </div>
 
           {/* Selected area info - rechts */}
-          <div style={{ width: '320px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+          <div className="header-selected" style={{ width: '320px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
             {selectedGebied && (
               <div style={{
                 display: 'flex',
