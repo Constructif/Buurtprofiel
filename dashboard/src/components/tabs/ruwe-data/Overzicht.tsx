@@ -111,7 +111,7 @@ export function Overzicht() {
 
       {/* Trends - placeholder sectie */}
       <section>
-        <Card title="Trends - Laatste 3 jaar" badge="placeholder">
+        <Card title="Trends - Laatste 5 jaar" badge="placeholder">
           <div className="trends-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px' }}>
             <TrendCard label="Bevolking" value="-" />
             <TrendCard label="Criminaliteit" value="-" />

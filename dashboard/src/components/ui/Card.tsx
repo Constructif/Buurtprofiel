@@ -4,10 +4,11 @@ interface CardProps {
   title: string;
   children: ReactNode;
   badge?: 'data' | 'placeholder';
+  year?: number;
   className?: string;
 }
 
-export function Card({ title, children, badge, className = '' }: CardProps) {
+export function Card({ title, children, badge, year, className = '' }: CardProps) {
   return (
     <div
       className={className}
@@ -25,7 +26,7 @@ export function Card({ title, children, badge, className = '' }: CardProps) {
           {title}
           {badge === 'data' && (
             <span style={{ fontSize: '11px', padding: '3px 8px', backgroundColor: '#dcfce7', color: '#15803d', borderRadius: '0', fontWeight: 500 }}>
-              CBS Data
+              CBS{year ? ` ${year}` : ''}
             </span>
           )}
           {badge === 'placeholder' && (

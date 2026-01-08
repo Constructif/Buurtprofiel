@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGebiedStore } from '../../store/gebiedStore';
-import { loadAllGebieden, fetchCBSData } from '../../services/cbs';
+import { loadAllGebieden, fetchCBSData, fetchCriminaliteitTrend, fetchVeiligheidsVergelijking, fetchVerhuisbewegingen, fetchHerkomstLandData } from '../../services/cbs';
 import type { Gebied } from '../../types/gebied';
 
 export function GebiedSearch() {
@@ -77,8 +77,39 @@ export function GebiedSearch() {
     // Laad data voor dit gebied
     setIsLoadingData(true);
     try {
-      const data = await fetchCBSData(gebied.code, gebied.naam);
-      setGebiedData(data);
+      // Bepaal gemeentecode voor verhuisbewegingen
+      const gemeenteCode = gebied.type === 'gemeente'
+        ? gebied.code
+        : gebied.gemeenteCode;
+
+      // Laad basis data, trend data, verhuisbewegingen en herkomstland parallel
+      const [data, trendData, bevolkingsDynamiek, herkomstLandGemeente] = await Promise.all([
+        fetchCBSData(gebied.code, gebied.naam),
+        fetchCriminaliteitTrend(gebied.code),
+        gemeenteCode ? fetchVerhuisbewegingen(gemeenteCode) : Promise.resolve({ jaren: [] }),
+        gemeenteCode ? fetchHerkomstLandData(gemeenteCode) : Promise.resolve({ totaal: 0, landen: [] }),
+      ]);
+
+      // Haal veiligheidsvergelijking op met gewogen parameters
+      const veiligheidsVergelijking = await fetchVeiligheidsVergelijking(
+        gebied,
+        data.bevolking.totaal,
+        data.criminaliteit.totaal,
+        data.criminaliteit.geweld,
+        data.criminaliteit.inbraakWoningen,
+        data.criminaliteit.vermogen,
+        data.criminaliteit.vernieling
+      );
+
+      // Combineer alle data
+      setGebiedData({
+        ...data,
+        criminaliteitTrend: trendData,
+        veiligheidsVergelijking,
+        bevolkingsDynamiek,
+        herkomstLandGemeente: herkomstLandGemeente.landen.length > 0 ? herkomstLandGemeente : undefined,
+        gemeenteNaam: gebied.gemeenteNaam || gebied.naam,
+      });
     } catch (error) {
       console.error('Fout bij laden data:', error);
     } finally {
