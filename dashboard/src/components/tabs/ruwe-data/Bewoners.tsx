@@ -324,8 +324,9 @@ export function Bewoners() {
                       <XAxis type="number" unit="%" domain={[0, 'auto']} />
                       <YAxis type="category" dataKey="land" tick={{ fontSize: 12 }} width={75} />
                       <Tooltip
-                        formatter={(value: number, _name: string, props: { payload: { land: string } }) => {
-                          const isEuropa = EUROPESE_LANDEN.includes(props.payload.land);
+                        formatter={(value, _name, props) => {
+                          const land = (props.payload as { land: string })?.land;
+                          const isEuropa = land ? EUROPESE_LANDEN.includes(land) : false;
                           return [
                             `${value}% van totale bevolking`,
                             isEuropa ? 'Europa' : 'Buiten Europa'

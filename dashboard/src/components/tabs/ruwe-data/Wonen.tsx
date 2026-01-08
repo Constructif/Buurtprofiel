@@ -180,7 +180,7 @@ export function Wonen() {
                   <XAxis dataKey="jaar" tick={{ fontSize: 12 }} />
                   <YAxis tick={{ fontSize: 12 }} tickFormatter={(value) => formatNumber(value)} />
                   <Tooltip
-                    formatter={(value: number, name: string) => [formatNumber(value), name]}
+                    formatter={(value, name) => [formatNumber(value as number), name as string]}
                     labelFormatter={(label) => `Jaar ${label}`}
                   />
                   <Legend />
