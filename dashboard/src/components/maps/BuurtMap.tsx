@@ -21,10 +21,11 @@ function MapController({ geometry }: { geometry: GeoJSON.Feature | null }) {
   if (!geometry) return null;
 
   const getColor = () => {
-    const code = (geometry.properties as Record<string, unknown>)?.statcode as string || '';
-    if (code.startsWith('BU')) return '#f0a500';
-    if (code.startsWith('WK')) return '#0066cc';
-    return '#cc0066';
+    const props = geometry.properties as Record<string, unknown>;
+    const code = (props?.statcode || props?.buurtcode || props?.wijkcode || props?.gemeentecode || props?.code) as string || '';
+    if (code.startsWith('BU')) return '#f97316'; // Buurt - oranje
+    if (code.startsWith('WK')) return '#3b82f6'; // Wijk - blauw
+    return '#8b5cf6'; // Gemeente - paars
   };
 
   return (

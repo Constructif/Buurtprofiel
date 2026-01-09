@@ -262,3 +262,45 @@ body {
     grid-template-columns: repeat(3, 1fr) !important;
   }
 }
+
+/* Voorzieningen layout responsive */
+@media (max-width: 1200px) {
+  .voorzieningen-layout {
+    grid-template-columns: 200px 1fr 280px !important;
+    gap: 12px !important;
+  }
+}
+
+@media (max-width: 1024px) {
+  .voorzieningen-layout {
+    grid-template-columns: 1fr !important;
+  }
+
+  .voorzieningen-sidebar {
+    order: 1;
+  }
+
+  .voorzieningen-map {
+    order: 2;
+    position: relative !important;
+    height: 500px !important;
+  }
+
+  .voorzieningen-details {
+    order: 3;
+    position: relative !important;
+    max-height: none !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .voorzieningen-filters {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+  }
+
+  .voorzieningen-map {
+    height: 400px !important;
+  }
+}
