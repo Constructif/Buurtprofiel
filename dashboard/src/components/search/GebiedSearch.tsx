@@ -18,6 +18,7 @@ export function GebiedSearch() {
     isLoadingGebieden,
     setIsLoadingGebieden,
     setIsLoadingData,
+    prefetchVoorzieningen,
   } = useGebiedStore();
 
   // Laad gebieden bij eerste render
@@ -73,6 +74,9 @@ export function GebiedSearch() {
     setSelectedGebied(gebied);
     setIsOpen(false);
     setQuery('');
+
+    // Start prefetch voorzieningen op de achtergrond (fire-and-forget)
+    prefetchVoorzieningen(gebied.code);
 
     // Laad data voor dit gebied
     setIsLoadingData(true);

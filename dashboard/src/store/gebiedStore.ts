@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import type { Gebied, GebiedData } from '../types/gebied';
 import type { Voorziening } from '../services/overpass';
+import { fetchVoorzieningen } from '../services/overpass';
+import { fetchGeometry } from '../services/pdok';
+import { calculateBBox } from '../services/geo-utils';
 
 interface VoorzieningenCache {
   geometry: GeoJSON.Feature | null;
@@ -27,6 +30,7 @@ interface GebiedStore {
   setVoorzieningenCache: (gebiedCode: string, data: VoorzieningenCache) => void;
   getVoorzieningenCache: (gebiedCode: string) => VoorzieningenCache | null;
   clearVoorzieningenCache: () => void;
+  prefetchVoorzieningen: (gebiedCode: string) => Promise<void>;
 
   // Loading states
   isLoadingGebieden: boolean;
@@ -73,6 +77,38 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
     return cached;
   },
   clearVoorzieningenCache: () => set({ voorzieningenCache: new Map() }),
+
+  prefetchVoorzieningen: async (gebiedCode: string) => {
+    // Skip als al in cache
+    const cached = get().voorzieningenCache.get(`${gebiedCode}_v2`);
+    if (cached) {
+      const maxAge = 30 * 60 * 1000;
+      if (Date.now() - cached.timestamp <= maxAge) {
+        return; // Geldige cache aanwezig, skip prefetch
+      }
+    }
+
+    try {
+      // Haal geometrie op
+      const geo = await fetchGeometry(gebiedCode);
+      if (!geo?.geometry) return;
+
+      // Bereken bounding box en haal voorzieningen op
+      const bbox = calculateBBox(geo);
+      const voorzieningenData = await fetchVoorzieningen(bbox);
+
+      // Sla op in cache
+      const cache = new Map(get().voorzieningenCache);
+      cache.set(`${gebiedCode}_v2`, {
+        geometry: geo,
+        voorzieningen: voorzieningenData,
+        timestamp: Date.now(),
+      });
+      set({ voorzieningenCache: cache });
+    } catch (error) {
+      console.error('Prefetch voorzieningen fout:', error);
+    }
+  },
 
   isLoadingGebieden: false,
   setIsLoadingGebieden: (loading) => set({ isLoadingGebieden: loading }),

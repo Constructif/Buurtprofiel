@@ -14,7 +14,7 @@ export function Header() {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: '24px',
-            height: '56px'
+            height: '72px'
           }}
         >
           {/* Search - links */}
