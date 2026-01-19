@@ -162,5 +162,6 @@ export interface GebiedData {
   bevolkingsDynamiek?: BevolkingsDynamiek;
   herkomstLandGemeente?: HerkomstLandData;  // Gedetailleerde herkomst per land (alleen gemeente)
   gemeenteNaam?: string;  // Voor weergave bij verhuisbewegingen
-  dataJaar?: number;
+  dataJaar?: number;  // Criminaliteit jaar
+  kerncijfersJaar?: number;  // Kerncijfers jaar (demografisch, woningen, etc.)
 }

@@ -41,7 +41,7 @@ export function Wonen() {
     );
   }
 
-  const { woningen, dataJaar, bevolkingsDynamiek, gemeenteNaam } = gebiedData;
+  const { woningen, kerncijfersJaar, bevolkingsDynamiek, gemeenteNaam } = gebiedData;
   const totaal = woningen.totaal;
   const koopAantal = Math.round((woningen.koopPercentage / 100) * totaal);
   const huurAantal = Math.round((woningen.huurPercentage / 100) * totaal);
@@ -81,7 +81,7 @@ export function Wonen() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Woningvoorraad */}
-      <Card title="Woningvoorraad" badge="data" year={dataJaar}>
+      <Card title="Woningvoorraad" badge="data" year={kerncijfersJaar}>
         <InfoGrid
           items={[
             { label: 'Totaal woningen', value: formatNumber(totaal) },
@@ -95,7 +95,7 @@ export function Wonen() {
       {/* Charts grid */}
       <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Koop vs Huur */}
-        <Card title="Koop vs Huur" badge="data" year={dataJaar}>
+        <Card title="Koop vs Huur" badge="data" year={kerncijfersJaar}>
           <div style={{ height: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
@@ -120,7 +120,7 @@ export function Wonen() {
         </Card>
 
         {/* Woningtypes */}
-        <Card title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? dataJaar : undefined}>
+        <Card title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? kerncijfersJaar : undefined}>
           {hasWoningtypeData ? (
             <div style={{ height: '320px' }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -152,7 +152,7 @@ export function Wonen() {
       </div>
 
       {/* Huurdetails */}
-      <Card title="Huurwoningen Detail" badge="data" year={dataJaar}>
+      <Card title="Huurwoningen Detail" badge="data" year={kerncijfersJaar}>
         <InfoGrid
           items={[
             { label: 'Totaal huur', value: `${Math.round(woningen.huurPercentage)}%` },

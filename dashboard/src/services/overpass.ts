@@ -88,6 +88,10 @@ export async function fetchVoorzieningen(
     out center;
   `;
 
+  // Maak een AbortController voor timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 seconden timeout
+
   try {
     const response = await fetch(OVERPASS_API, {
       method: 'POST',
@@ -95,7 +99,10 @@ export async function fetchVoorzieningen(
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     if (!response.ok) {
       throw new Error(`Overpass API error: ${response.status}`);
@@ -107,8 +114,15 @@ export async function fetchVoorzieningen(
       .map((element) => parseElement(element))
       .filter((v): v is Voorziening => v !== null);
   } catch (error) {
+    clearTimeout(timeoutId);
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('Overpass API timeout na 45 seconden');
+      throw new Error('Timeout: Overpass API reageerde niet binnen 45 seconden');
+    }
+
     console.error('Error fetching voorzieningen:', error);
-    return [];
+    throw error; // Gooi error door zodat retry logica in store kan werken
   }
 }
 

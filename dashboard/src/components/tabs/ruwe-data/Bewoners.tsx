@@ -56,7 +56,7 @@ export function Bewoners() {
     );
   }
 
-  const { bevolking, huishoudens, dataJaar, herkomstLandGemeente, gemeenteNaam } = gebiedData;
+  const { bevolking, huishoudens, kerncijfersJaar, herkomstLandGemeente, gemeenteNaam } = gebiedData;
   const totaal = bevolking.totaal;
 
   const leeftijdData = [
@@ -90,7 +90,7 @@ export function Bewoners() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       {/* Demografische gegevens */}
-      <Card title="Demografische Gegevens" badge="data" year={dataJaar}>
+      <Card title="Demografische Gegevens" badge="data" year={kerncijfersJaar}>
         <InfoGrid
           items={[
             { label: 'Totaal inwoners', value: formatNumber(totaal) },
@@ -175,7 +175,7 @@ export function Bewoners() {
       {/* Charts grid */}
       <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Leeftijdsverdeling */}
-        <Card title="Leeftijdsverdeling" badge="data" year={dataJaar}>
+        <Card title="Leeftijdsverdeling" badge="data" year={kerncijfersJaar}>
           <div style={{ height: '320px' }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={leeftijdData}>
@@ -194,7 +194,7 @@ export function Bewoners() {
         </Card>
 
         {/* Herkomst */}
-        <Card title="Herkomst Bevolking" badge="data" year={dataJaar}>
+        <Card title="Herkomst Bevolking" badge="data" year={kerncijfersJaar}>
           <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
             Geboorteland van bewoner of ouders (CBS indeling)
           </p>
@@ -375,7 +375,7 @@ export function Bewoners() {
       </Card>
 
       {/* Huishoudenstypen */}
-      <Card title="Huishoudenstypen" badge="data" year={dataJaar}>
+      <Card title="Huishoudenstypen" badge="data" year={kerncijfersJaar}>
         <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', flexWrap: 'wrap' }}>
           <div>
             <span style={{ fontSize: '12px', color: '#6b7280' }}>Totaal huishoudens</span>

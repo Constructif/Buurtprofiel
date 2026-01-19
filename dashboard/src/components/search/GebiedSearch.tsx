@@ -75,9 +75,6 @@ export function GebiedSearch() {
     setIsOpen(false);
     setQuery('');
 
-    // Start prefetch voorzieningen op de achtergrond (fire-and-forget)
-    prefetchVoorzieningen(gebied.code);
-
     // Laad data voor dit gebied
     setIsLoadingData(true);
     try {
@@ -86,12 +83,17 @@ export function GebiedSearch() {
         ? gebied.code
         : gebied.gemeenteCode;
 
-      // Laad basis data, trend data, verhuisbewegingen en herkomstland parallel
+      // Laad ALLE data parallel, inclusief voorzieningen
+      // Dit zorgt ervoor dat alle tabs data hebben voordat loading klaar is
       const [data, trendData, bevolkingsDynamiek, herkomstLandGemeente] = await Promise.all([
         fetchCBSData(gebied.code, gebied.naam),
         fetchCriminaliteitTrend(gebied.code),
         gemeenteCode ? fetchVerhuisbewegingen(gemeenteCode) : Promise.resolve({ jaren: [] }),
         gemeenteCode ? fetchHerkomstLandData(gemeenteCode) : Promise.resolve({ totaal: 0, landen: [] }),
+        // Start voorzieningen prefetch parallel - dit wacht niet op resultaat
+        // maar de promise wordt opgeslagen zodat de Voorzieningen component
+        // kan wachten op dezelfde promise (geen dubbele API calls)
+        prefetchVoorzieningen(gebied.code),
       ]);
 
       // Haal veiligheidsvergelijking op met gewogen parameters
@@ -237,7 +239,7 @@ export function GebiedSearch() {
                 >
                   <p style={{ fontWeight: 500, color: '#111827', margin: 0 }}>{g.naam}</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-                    {g.code} • {g.type}
+                    {g.type === 'gemeente' ? 'Gemeente' : g.type === 'wijk' ? `Wijk in ${g.gemeenteNaam || 'onbekend'}` : `Buurt in ${g.gemeenteNaam || 'onbekend'}`}
                   </p>
                 </button>
               ))}

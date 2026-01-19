@@ -4,16 +4,13 @@ import type { Map, GeoJSON as LeafletGeoJSON, DivIcon } from 'leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { fetchGeometry } from '../../../services/pdok';
 import {
-  fetchVoorzieningen,
   getTypeLabel,
   getTypeColor,
   groupVoorzieningenByType,
   type Voorziening,
   type VoorzieningType,
 } from '../../../services/overpass';
-import { calculateBBox } from '../../../services/geo-utils';
 import { Card } from '../../ui/Card';
 
 // Fix voor Leaflet default marker icons in Vite
@@ -161,24 +158,13 @@ function MapController({ geometry, voorzieningen, selectedVoorzieningId }: MapCo
 }
 
 export function Voorzieningen() {
-  const { selectedGebied, getVoorzieningenCache, setVoorzieningenCache } = useGebiedStore();
+  const { selectedGebied, getVoorzieningenCache, waitForVoorzieningen } = useGebiedStore();
 
-  // Lazy initializer: check cache bij eerste mount
-  const [geometry, setGeometry] = useState<GeoJSON.Feature | null>(() => {
-    if (!selectedGebied) return null;
-    const cached = getVoorzieningenCache(selectedGebied.code);
-    return cached?.geometry ?? null;
-  });
-  const [voorzieningen, setVoorzieningen] = useState<Voorziening[]>(() => {
-    if (!selectedGebied) return [];
-    const cached = getVoorzieningenCache(selectedGebied.code);
-    return cached?.voorzieningen ?? [];
-  });
-  const [loading, setLoading] = useState(() => {
-    if (!selectedGebied) return false;
-    const cached = getVoorzieningenCache(selectedGebied.code);
-    return !cached;
-  });
+  // State voor voorzieningen data
+  const [geometry, setGeometry] = useState<GeoJSON.Feature | null>(null);
+  const [voorzieningen, setVoorzieningen] = useState<Voorziening[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [selectedTypes, setSelectedTypes] = useState<Set<VoorzieningType>>(
     new Set([
       'basisschool',
@@ -213,6 +199,7 @@ export function Voorzieningen() {
       setVoorzieningen([]);
       setSelectedVoorziening(null);
       setLoading(false);
+      setError(null);
       return;
     }
 
@@ -221,10 +208,11 @@ export function Voorzieningen() {
     async function loadData() {
       if (!selectedGebied || isCancelled) return;
 
-      // Reset selectie bij nieuw gebied
+      // Reset selectie en error bij nieuw gebied
       setSelectedVoorziening(null);
+      setError(null);
 
-      // Check cache EERST
+      // Check cache EERST (synchrone check)
       const cached = getVoorzieningenCache(selectedGebied.code);
       if (cached) {
         // Uit cache laden (instant)
@@ -235,42 +223,31 @@ export function Voorzieningen() {
         return;
       }
 
-      // Geen cache - reset en laad nieuwe data
-      setGeometry(null);
-      setVoorzieningen([]);
+      // Geen cache - wacht op prefetch of start nieuwe fetch
+      // Dit voorkomt dubbele API calls (race condition fix)
       setLoading(true);
 
       try {
-        // Haal geometrie op
-        const geo = await fetchGeometry(selectedGebied.code);
+        // Wacht op voorzieningen (gebruikt bestaande prefetch of start nieuwe)
+        // Dit heeft ingebouwde retry logica (3 pogingen met exponential backoff)
+        const result = await waitForVoorzieningen(selectedGebied.code);
 
-        // Check of component nog gemount is en gebied nog hetzelfde is
+        // Check of component nog gemount is
         if (isCancelled) return;
 
-        setGeometry(geo);
-
-        if (geo && geo.geometry) {
-          // Bereken bounding box uit geometrie
-          const bbox = calculateBBox(geo);
-
-          // Haal voorzieningen op
-          const voorzieningenData = await fetchVoorzieningen(bbox);
-
-          // Check nogmaals of we niet gecancelled zijn
-          if (isCancelled) return;
-
-          setVoorzieningen(voorzieningenData);
-
-          // Sla op in cache
-          setVoorzieningenCache(selectedGebied.code, {
-            geometry: geo,
-            voorzieningen: voorzieningenData,
-            timestamp: Date.now(),
-          });
+        if (result) {
+          setGeometry(result.geometry);
+          setVoorzieningen(result.voorzieningen);
+        } else {
+          // Prefetch gefaald na alle retries
+          setError('Kon voorzieningen niet laden. Probeer het later opnieuw.');
+          setGeometry(null);
+          setVoorzieningen([]);
         }
-      } catch (error) {
-        console.error('Fout bij laden voorzieningen:', error);
+      } catch (err) {
+        console.error('Fout bij laden voorzieningen:', err);
         if (!isCancelled) {
+          setError('Er ging iets mis bij het laden van voorzieningen.');
           setGeometry(null);
           setVoorzieningen([]);
         }
@@ -287,7 +264,7 @@ export function Voorzieningen() {
     return () => {
       isCancelled = true;
     };
-  }, [selectedGebied, getVoorzieningenCache, setVoorzieningenCache]);
+  }, [selectedGebied, getVoorzieningenCache, waitForVoorzieningen]);
 
   const toggleType = (type: VoorzieningType) => {
     const newSet = new Set(selectedTypes);
@@ -324,6 +301,53 @@ export function Voorzieningen() {
         <p style={{ color: '#6b7280', fontSize: '16px' }}>
           Selecteer een buurt, wijk of gemeente om voorzieningen te bekijken
         </p>
+      </div>
+    );
+  }
+
+  // Toon error melding als laden is mislukt
+  if (error && !loading) {
+    return (
+      <div style={{ textAlign: 'center', padding: '80px 20px' }}>
+        <div style={{
+          backgroundColor: '#fef2f2',
+          border: '1px solid #fecaca',
+          borderRadius: '8px',
+          padding: '24px',
+          maxWidth: '400px',
+          margin: '0 auto'
+        }}>
+          <p style={{ color: '#dc2626', fontSize: '16px', marginBottom: '12px', fontWeight: 500 }}>
+            {error}
+          </p>
+          <button
+            onClick={() => {
+              setError(null);
+              setLoading(true);
+              waitForVoorzieningen(selectedGebied.code).then((result) => {
+                if (result) {
+                  setGeometry(result.geometry);
+                  setVoorzieningen(result.voorzieningen);
+                  setError(null);
+                } else {
+                  setError('Kon voorzieningen niet laden na meerdere pogingen.');
+                }
+                setLoading(false);
+              });
+            }}
+            style={{
+              backgroundColor: '#eb6608',
+              color: 'white',
+              border: 'none',
+              padding: '10px 20px',
+              borderRadius: '6px',
+              cursor: 'pointer',
+              fontWeight: 500
+            }}
+          >
+            Opnieuw proberen
+          </button>
+        </div>
       </div>
     );
   }

@@ -4,6 +4,34 @@ const CBS_BASE_URL = 'https://datasets.cbs.nl/odata/v1/CBS';
 const CBS_CRIME_URL = 'https://dataderden.cbs.nl/ODataApi/OData/47018NED';
 const CBS_PC4_URL = 'https://opendata.cbs.nl/ODataApi/odata/85640NED';  // Herkomstland per PC4
 
+// Cache voor kerncijfers jaar (hoeft maar 1x opgehaald te worden)
+let kerncijfersJaarCache: number | null = null;
+
+// Haal het kerncijfers jaar op uit de dataset properties
+async function fetchKerncijfersJaar(): Promise<number> {
+  if (kerncijfersJaarCache !== null) {
+    return kerncijfersJaarCache;
+  }
+
+  try {
+    const response = await fetch(`${CBS_BASE_URL}/85984NED/Properties`);
+    if (response.ok) {
+      const data = await response.json();
+      // TemporalCoverage bevat het jaar, bijv. "2024"
+      const jaar = parseInt(data.TemporalCoverage, 10);
+      if (!isNaN(jaar)) {
+        kerncijfersJaarCache = jaar;
+        return jaar;
+      }
+    }
+  } catch (e) {
+    console.warn('Kon kerncijfers jaar niet ophalen:', e);
+  }
+
+  // Fallback
+  return 2024;
+}
+
 // Pad een gebiedscode naar het juiste formaat voor de criminaliteit API
 function padGebiedCode(code: string): string {
   // Buurten: BU + 8 cijfers, totaal 10 chars
@@ -64,10 +92,11 @@ export async function loadAllGebieden(): Promise<Gebied[]> {
 
 // Haal CBS kerncijfers op voor een gebied
 export async function fetchCBSData(code: string, naam: string): Promise<GebiedData> {
-  // 1. Kerncijfers (85984NED) - Demografische data
-  const response1 = await fetch(
-    `${CBS_BASE_URL}/85984NED/Observations?$filter=WijkenEnBuurten eq '${code}'`
-  );
+  // 1. Kerncijfers (85984NED) - Demografische data + jaar parallel ophalen
+  const [response1, kerncijfersJaar] = await Promise.all([
+    fetch(`${CBS_BASE_URL}/85984NED/Observations?$filter=WijkenEnBuurten eq '${code}'`),
+    fetchKerncijfersJaar(),
+  ]);
 
   if (!response1.ok) {
     throw new Error('Kan Kerncijfers niet ophalen');
@@ -81,7 +110,7 @@ export async function fetchCBSData(code: string, naam: string): Promise<GebiedDa
   // We halen alleen totaal misdrijven (0.0.0) voor het meest recente jaar
   const { data: criminaliteit, jaar: dataJaar } = await fetchCriminaliteitData(code);
 
-  return processCBSData(code, naam, buurtkenmerken, criminaliteit, dataJaar);
+  return processCBSData(code, naam, buurtkenmerken, criminaliteit, dataJaar, kerncijfersJaar);
 }
 
 // Haal criminaliteitsdata op voor een specifiek gebied
@@ -179,7 +208,8 @@ function processCBSData(
   naam: string,
   buurtkenmerken: Array<{ Measure: string; Value?: number; StringValue?: string }>,
   criminaliteit: Record<string, number>,
-  dataJaar: number
+  dataJaar: number,
+  kerncijfersJaar: number
 ): GebiedData {
   // Helper om kenmerk te vinden
   const getKenmerk = (measure: string): number | null => {
@@ -327,6 +357,7 @@ function processCBSData(
       cybercrime,
     },
     dataJaar,
+    kerncijfersJaar,
   };
 }
 
