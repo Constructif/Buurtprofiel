@@ -3,7 +3,7 @@ import { useState, type ReactNode } from 'react';
 interface CardProps {
   title?: string;
   children: ReactNode;
-  badge?: 'data' | 'placeholder';
+  badge?: 'data' | 'placeholder' | 'info';
   badgeText?: string;
   badgeTooltip?: string;
   year?: number;
@@ -99,6 +99,11 @@ export function Card({ title, children, badge, badgeText, badgeTooltip, year, cl
             {badge === 'placeholder' && (
               <span style={{ fontSize: '11px', padding: '3px 8px', backgroundColor: '#fef3c7', color: '#b45309', borderRadius: '0', fontWeight: 500 }}>
                 Placeholder
+              </span>
+            )}
+            {badge === 'info' && (
+              <span style={{ fontSize: '11px', padding: '3px 8px', backgroundColor: '#dbeafe', color: '#1d4ed8', borderRadius: '0', fontWeight: 500 }}>
+                {badgeText || 'Info'}
               </span>
             )}
           </h3>

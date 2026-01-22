@@ -2,7 +2,7 @@ import { Header } from './components/layout/Header';
 import { MainTabs } from './components/layout/MainTabs';
 import { SubTabs } from './components/layout/SubTabs';
 import { useGebiedStore } from './store/gebiedStore';
-import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen } from './components/tabs/ruwe-data';
+import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn } from './components/tabs/ruwe-data';
 import { EigenOnderzoekPlaceholder } from './components/tabs/eigen-onderzoek/Placeholder';
 
 function App() {
@@ -26,7 +26,7 @@ function App() {
       case 'voorzieningen':
         return <Voorzieningen />;
       case 'zorg':
-        return <PlaceholderTab name="Zorg & Welzijn" />;
+        return <ZorgWelzijn />;
       case 'economie':
         return <PlaceholderTab name="Werk & Inkomen" />;
       case 'leefomgeving':

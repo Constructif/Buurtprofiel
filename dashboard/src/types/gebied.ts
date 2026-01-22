@@ -149,6 +149,14 @@ export interface HerkomstLandData {
   };
 }
 
+// Jeugdzorg en WMO data (CBS Kerncijfers 85984NED)
+export interface JeugdzorgWmoData {
+  jeugdzorgAantal: number | null;      // JongerenMetJeugdzorgInNatura_91
+  jeugdzorgPercentage: number | null;  // PercentageJongerenMetJeugdzorg_92
+  wmoAantal: number | null;            // WmoClienten_93
+  wmoPer1000: number | null;           // WmoClientenRelatief_94
+}
+
 export interface GebiedData {
   code: string;
   naam: string;
@@ -161,6 +169,7 @@ export interface GebiedData {
   veiligheidsVergelijking?: VeiligheidsScoreVergelijking;
   bevolkingsDynamiek?: BevolkingsDynamiek;
   herkomstLandGemeente?: HerkomstLandData;  // Gedetailleerde herkomst per land (alleen gemeente)
+  jeugdzorgWmo?: JeugdzorgWmoData;  // Jeugdzorg en WMO data
   gemeenteNaam?: string;  // Voor weergave bij verhuisbewegingen
   dataJaar?: number;  // Criminaliteit jaar
   kerncijfersJaar?: number;  // Kerncijfers jaar (demografisch, woningen, etc.)

@@ -356,6 +356,12 @@ function processCBSData(
       aantastingOpenbareOrde,
       cybercrime,
     },
+    jeugdzorgWmo: {
+      jeugdzorgAantal: getKenmerk('T001203'),        // Jongeren met jeugdzorg in natura
+      jeugdzorgPercentage: getKenmerk('A045561'),    // Percentage jongeren met jeugdzorg
+      wmoAantal: getKenmerk('M001342_1'),            // WMO-cliënten
+      wmoPer1000: getKenmerk('M001342_2'),           // WMO-cliënten relatief (per 1000)
+    },
     dataJaar,
     kerncijfersJaar,
   };
