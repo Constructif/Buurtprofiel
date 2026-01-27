@@ -314,26 +314,26 @@ function processCBSData(
     },
     inkomen: {
       gemiddeld: (getKenmerk('M000223') ?? 0) * 1000,
-      laagInkomenPercentage: getKenmerk('T001345') ?? 0,
-      hoogInkomenPercentage: getKenmerk('A025294') ?? 0,
+      laagInkomenPercentage: getKenmerk('D000186') ?? 0,
+      hoogInkomenPercentage: getKenmerk('D000184') ?? 0,
 
       // Opleidingsniveau (15-75 jaar)
-      laagOpgeleid: getKenmerk('BasisonderwijsVmboMbo1_67'),
-      middelOpgeleid: getKenmerk('HavoVwoMbo24_68'),
-      hoogOpgeleid: getKenmerk('HboWo_69'),
+      laagOpgeleid: getKenmerk('2018700'),
+      middelOpgeleid: getKenmerk('2018740'),
+      hoogOpgeleid: getKenmerk('2018790'),
 
       // Arbeidsparticipatie (15-75 jaar)
-      arbeidsparticipatie: getKenmerk('Nettoarbeidsparticipatie_71'),
-      werknemers: getKenmerk('PercentageWerknemers_72'),
-      zelfstandigen: getKenmerk('PercentageZelfstandigen_75'),
-      vastContract: getKenmerk('WerknemersMetVasteArbeidsrelatie_73'),
-      flexContract: getKenmerk('WerknemersMetFlexibeleArbeidsrelatie_74'),
+      arbeidsparticipatie: getKenmerk('M001796_2'),
+      werknemers: getKenmerk('2021320'),
+      zelfstandigen: getKenmerk('2021380'),
+      vastContract: getKenmerk('2021330'),
+      flexContract: getKenmerk('2021340'),
 
       // Uitkeringen (aantallen)
-      bijstandAantal: getKenmerk('PersonenPerSoortUitkeringBijstand_87'),
-      wwAantal: getKenmerk('PersonenPerSoortUitkeringWW_89'),
-      aoAantal: getKenmerk('PersonenPerSoortUitkeringAO_88'),
-      aowAantal: getKenmerk('PersonenPerSoortUitkeringAOW_90'),
+      bijstandAantal: getKenmerk('D006842'),
+      wwAantal: getKenmerk('D001827'),
+      aoAantal: getKenmerk('D006837'),
+      aowAantal: getKenmerk('D000193'),
     },
     criminaliteit: {
       totaal: totaalMisdrijven,

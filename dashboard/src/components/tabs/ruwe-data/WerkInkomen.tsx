@@ -155,6 +155,12 @@ export function WerkInkomen() {
             </p>
           </div>
           <div>
+            <span style={{ fontSize: '12px', color: '#6b7280' }}>Midden inkomen</span>
+            <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0', color: COLORS.midden }}>
+              {Math.round(middenInkomenPercentage)}%
+            </p>
+          </div>
+          <div>
             <span style={{ fontSize: '12px', color: '#6b7280' }}>Hoog inkomen</span>
             <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0', color: COLORS.hoog }}>
               {Math.round(inkomen.hoogInkomenPercentage)}%
