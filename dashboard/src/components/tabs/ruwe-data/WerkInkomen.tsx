@@ -11,7 +11,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  Legend,
 } from 'recharts';
 
 function formatNumber(num: number): string {
@@ -209,7 +208,7 @@ export function WerkInkomen() {
                   <XAxis type="number" unit="%" domain={[0, 100]} />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={115} />
                   <Tooltip
-                    formatter={(value, _name, props) => {
+                    formatter={(_value, _name, props) => {
                       const item = props.payload as { value: number; percentage: number };
                       return [`${formatNumber(item.value)} personen (${item.percentage}%)`, 'Aantal'];
                     }}
