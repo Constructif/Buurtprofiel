@@ -316,6 +316,24 @@ function processCBSData(
       gemiddeld: (getKenmerk('M000223') ?? 0) * 1000,
       laagInkomenPercentage: getKenmerk('T001345') ?? 0,
       hoogInkomenPercentage: getKenmerk('A025294') ?? 0,
+
+      // Opleidingsniveau (15-75 jaar)
+      laagOpgeleid: getKenmerk('BasisonderwijsVmboMbo1_67'),
+      middelOpgeleid: getKenmerk('HavoVwoMbo24_68'),
+      hoogOpgeleid: getKenmerk('HboWo_69'),
+
+      // Arbeidsparticipatie (15-75 jaar)
+      arbeidsparticipatie: getKenmerk('Nettoarbeidsparticipatie_71'),
+      werknemers: getKenmerk('PercentageWerknemers_72'),
+      zelfstandigen: getKenmerk('PercentageZelfstandigen_75'),
+      vastContract: getKenmerk('WerknemersMetVasteArbeidsrelatie_73'),
+      flexContract: getKenmerk('WerknemersMetFlexibeleArbeidsrelatie_74'),
+
+      // Uitkeringen (aantallen)
+      bijstandAantal: getKenmerk('PersonenPerSoortUitkeringBijstand_87'),
+      wwAantal: getKenmerk('PersonenPerSoortUitkeringWW_89'),
+      aoAantal: getKenmerk('PersonenPerSoortUitkeringAO_88'),
+      aowAantal: getKenmerk('PersonenPerSoortUitkeringAOW_90'),
     },
     criminaliteit: {
       totaal: totaalMisdrijven,

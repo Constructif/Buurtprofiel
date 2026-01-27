@@ -51,6 +51,24 @@ export interface InkomenData {
   gemiddeld: number;
   laagInkomenPercentage: number;
   hoogInkomenPercentage: number;
+
+  // Opleidingsniveau (15-75 jaar)
+  laagOpgeleid: number | null;       // Basisonderwijs, vmbo, mbo1
+  middelOpgeleid: number | null;     // Havo, vwo, mbo2-4
+  hoogOpgeleid: number | null;       // Hbo, wo
+
+  // Arbeidsparticipatie (15-75 jaar)
+  arbeidsparticipatie: number | null;  // % van bevolking dat werkt
+  werknemers: number | null;           // % in loondienst
+  zelfstandigen: number | null;        // % zelfstandig ondernemer
+  vastContract: number | null;         // % met vast dienstverband
+  flexContract: number | null;         // % met flexibel dienstverband
+
+  // Uitkeringen (aantallen)
+  bijstandAantal: number | null;
+  wwAantal: number | null;
+  aoAantal: number | null;
+  aowAantal: number | null;
 }
 
 export interface CriminaliteitData {
