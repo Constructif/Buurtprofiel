@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
 import { InfoGrid } from '../../ui/InfoGrid';
+import { fetchOpleidingArbeidsData, type OpleidingArbeidsData } from '../../../services/cbs';
 import {
   BarChart,
   Bar,
@@ -42,6 +44,61 @@ const COLORS = {
 export function WerkInkomen() {
   const { gebiedData, selectedGebied, isLoadingData } = useGebiedStore();
 
+  // State voor fallback opleiding/arbeids data
+  const [fallbackData, setFallbackData] = useState<{
+    data: OpleidingArbeidsData | null;
+    niveau: 'buurt' | 'wijk' | 'gemeente' | null;
+    isLoading: boolean;
+  }>({ data: null, niveau: null, isLoading: false });
+
+  // Effect om fallback data op te halen wanneer buurtdata ontbreekt
+  useEffect(() => {
+    if (!gebiedData || !selectedGebied) {
+      setFallbackData({ data: null, niveau: null, isLoading: false });
+      return;
+    }
+
+    const { inkomen } = gebiedData;
+
+    // Check of buurtdata beschikbaar is
+    const hasOpleidingBuurt = inkomen.laagOpgeleid !== null;
+    const hasArbeidsBuurt = inkomen.arbeidsparticipatie !== null;
+
+    if (hasOpleidingBuurt && hasArbeidsBuurt) {
+      // Buurtdata is beschikbaar, geen fallback nodig
+      setFallbackData({ data: null, niveau: 'buurt', isLoading: false });
+      return;
+    }
+
+    // Start fallback fetch
+    setFallbackData(prev => ({ ...prev, isLoading: true }));
+
+    const tryFetchFallback = async () => {
+      // Probeer eerst wijk
+      if (selectedGebied.wijkCode) {
+        const wijkData = await fetchOpleidingArbeidsData(selectedGebied.wijkCode);
+        if (wijkData && (wijkData.opleiding.laag !== null || wijkData.arbeids.participatie !== null)) {
+          setFallbackData({ data: wijkData, niveau: 'wijk', isLoading: false });
+          return;
+        }
+      }
+
+      // Probeer gemeente
+      if (selectedGebied.gemeenteCode) {
+        const gemData = await fetchOpleidingArbeidsData(selectedGebied.gemeenteCode);
+        if (gemData && (gemData.opleiding.laag !== null || gemData.arbeids.participatie !== null)) {
+          setFallbackData({ data: gemData, niveau: 'gemeente', isLoading: false });
+          return;
+        }
+      }
+
+      // Geen fallback data gevonden
+      setFallbackData({ data: null, niveau: null, isLoading: false });
+    };
+
+    tryFetchFallback();
+  }, [gebiedData, selectedGebied]);
+
   if (!selectedGebied) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
@@ -61,6 +118,12 @@ export function WerkInkomen() {
 
   const { inkomen, bevolking, kerncijfersJaar } = gebiedData;
 
+  // Bepaal welke opleiding/arbeids data te gebruiken
+  const opleidingSource = inkomen.laagOpgeleid !== null ? inkomen : fallbackData.data?.opleiding;
+  const arbeidsSource = inkomen.arbeidsparticipatie !== null ? inkomen : fallbackData.data?.arbeids;
+  const opleidingNiveau = inkomen.laagOpgeleid !== null ? 'buurt' : fallbackData.niveau;
+  const arbeidsNiveau = inkomen.arbeidsparticipatie !== null ? 'buurt' : fallbackData.niveau;
+
   // Inkomensverdeling data
   const middenInkomenPercentage = Math.max(0, 100 - (inkomen.laagInkomenPercentage || 0) - (inkomen.hoogInkomenPercentage || 0));
   const inkomenVerdelingData = [
@@ -69,43 +132,53 @@ export function WerkInkomen() {
     { name: 'Hoog inkomen', value: inkomen.hoogInkomenPercentage || 0, color: COLORS.hoog },
   ].filter(item => item.value > 0);
 
-  // Opleidingsniveau data
-  const totaalOpgeleid = (inkomen.laagOpgeleid || 0) + (inkomen.middelOpgeleid || 0) + (inkomen.hoogOpgeleid || 0);
+  // Opleidingsniveau data (met fallback)
+  const opleidingLaag = opleidingSource && 'laag' in opleidingSource ? opleidingSource.laag : (opleidingSource as typeof inkomen)?.laagOpgeleid;
+  const opleidingMidden = opleidingSource && 'midden' in opleidingSource ? opleidingSource.midden : (opleidingSource as typeof inkomen)?.middelOpgeleid;
+  const opleidingHoog = opleidingSource && 'hoog' in opleidingSource ? opleidingSource.hoog : (opleidingSource as typeof inkomen)?.hoogOpgeleid;
+
+  const totaalOpgeleid = (opleidingLaag || 0) + (opleidingMidden || 0) + (opleidingHoog || 0);
   const opleidingData = totaalOpgeleid > 0 ? [
     {
       name: 'Laag opgeleid',
-      value: inkomen.laagOpgeleid || 0,
-      percentage: Math.round(((inkomen.laagOpgeleid || 0) / totaalOpgeleid) * 100),
+      value: opleidingLaag || 0,
+      percentage: Math.round(((opleidingLaag || 0) / totaalOpgeleid) * 100),
       color: COLORS.laag,
     },
     {
       name: 'Middelbaar opgeleid',
-      value: inkomen.middelOpgeleid || 0,
-      percentage: Math.round(((inkomen.middelOpgeleid || 0) / totaalOpgeleid) * 100),
+      value: opleidingMidden || 0,
+      percentage: Math.round(((opleidingMidden || 0) / totaalOpgeleid) * 100),
       color: COLORS.oranje,
     },
     {
       name: 'Hoog opgeleid',
-      value: inkomen.hoogOpgeleid || 0,
-      percentage: Math.round(((inkomen.hoogOpgeleid || 0) / totaalOpgeleid) * 100),
+      value: opleidingHoog || 0,
+      percentage: Math.round(((opleidingHoog || 0) / totaalOpgeleid) * 100),
       color: COLORS.hoog,
     },
   ] : [];
 
-  const hasOpleidingData = opleidingData.length > 0;
+  const hasOpleidingData = opleidingData.length > 0 || fallbackData.isLoading;
 
-  // Arbeidsparticipatie data
-  const hasArbeidsData = inkomen.arbeidsparticipatie !== null;
-  const arbeidsData = hasArbeidsData ? [
-    { name: 'Werknemers', value: inkomen.werknemers || 0 },
-    { name: 'Zelfstandigen', value: inkomen.zelfstandigen || 0 },
+  // Arbeidsparticipatie data (met fallback)
+  const arbeidsParticipatie = arbeidsSource && 'participatie' in arbeidsSource ? arbeidsSource.participatie : (arbeidsSource as typeof inkomen)?.arbeidsparticipatie;
+  const arbeidsWerknemers = arbeidsSource && 'werknemers' in arbeidsSource ? arbeidsSource.werknemers : (arbeidsSource as typeof inkomen)?.werknemers;
+  const arbeidsZelfstandigen = arbeidsSource && 'zelfstandigen' in arbeidsSource ? arbeidsSource.zelfstandigen : (arbeidsSource as typeof inkomen)?.zelfstandigen;
+  const arbeidsVast = arbeidsSource && 'vast' in arbeidsSource ? arbeidsSource.vast : (arbeidsSource as typeof inkomen)?.vastContract;
+  const arbeidsFlex = arbeidsSource && 'flex' in arbeidsSource ? arbeidsSource.flex : (arbeidsSource as typeof inkomen)?.flexContract;
+
+  const hasArbeidsData = arbeidsParticipatie !== null || fallbackData.isLoading;
+  const arbeidsData = hasArbeidsData && arbeidsParticipatie !== null ? [
+    { name: 'Werknemers', value: arbeidsWerknemers || 0 },
+    { name: 'Zelfstandigen', value: arbeidsZelfstandigen || 0 },
   ].filter(item => item.value > 0) : [];
 
   // Contract type data
-  const hasContractData = inkomen.vastContract !== null || inkomen.flexContract !== null;
+  const hasContractData = arbeidsVast !== null || arbeidsFlex !== null;
   const contractData = hasContractData ? [
-    { name: 'Vast contract', value: inkomen.vastContract || 0, color: COLORS.hoog },
-    { name: 'Flex contract', value: inkomen.flexContract || 0, color: COLORS.oranje },
+    { name: 'Vast contract', value: arbeidsVast || 0, color: COLORS.hoog },
+    { name: 'Flex contract', value: arbeidsFlex || 0, color: COLORS.oranje },
   ] : [];
 
   // Uitkeringen data
@@ -126,7 +199,7 @@ export function WerkInkomen() {
 
   // Verschil met NL gemiddelde
   const inkomenVerschil = inkomen.gemiddeld - NL_GEMIDDELD_INKOMEN;
-  const participatieVerschil = (inkomen.arbeidsparticipatie || 0) - NL_ARBEIDSPARTICIPATIE;
+  const participatieVerschil = (arbeidsParticipatie || 0) - NL_ARBEIDSPARTICIPATIE;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -202,8 +275,18 @@ export function WerkInkomen() {
       </Card>
 
       {/* Opleidingsniveau */}
-      <Card title="Opleidingsniveau" badge={hasOpleidingData ? "data" : "placeholder"} year={hasOpleidingData ? kerncijfersJaar : undefined}>
-        {hasOpleidingData ? (
+      <Card
+        title="Opleidingsniveau"
+        badge={fallbackData.isLoading ? "placeholder" : (opleidingData.length > 0 ? (opleidingNiveau === 'buurt' ? "data" : "fallback") : "placeholder")}
+        year={opleidingData.length > 0 ? kerncijfersJaar : undefined}
+        subtitle={opleidingNiveau && opleidingNiveau !== 'buurt' && opleidingData.length > 0 ? `Data van ${opleidingNiveau}niveau` : undefined}
+      >
+        {fallbackData.isLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
+            <div style={{ width: '24px', height: '24px', border: '3px solid #eb6608', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+            <p>Fallback data laden...</p>
+          </div>
+        ) : opleidingData.length > 0 ? (
           <>
             <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '16px' }}>
               Hoogst behaald onderwijsniveau (15-75 jaar)
@@ -229,29 +312,39 @@ export function WerkInkomen() {
             </div>
             <InfoGrid
               items={[
-                { label: 'Laag opgeleid', value: `${formatNumber(inkomen.laagOpgeleid || 0)} (${opleidingData[0]?.percentage || 0}%)` },
-                { label: 'Middelbaar opgeleid', value: `${formatNumber(inkomen.middelOpgeleid || 0)} (${opleidingData[1]?.percentage || 0}%)` },
-                { label: 'Hoog opgeleid', value: `${formatNumber(inkomen.hoogOpgeleid || 0)} (${opleidingData[2]?.percentage || 0}%)` },
+                { label: 'Laag opgeleid', value: `${formatNumber(opleidingLaag || 0)} (${opleidingData[0]?.percentage || 0}%)` },
+                { label: 'Middelbaar opgeleid', value: `${formatNumber(opleidingMidden || 0)} (${opleidingData[1]?.percentage || 0}%)` },
+                { label: 'Hoog opgeleid', value: `${formatNumber(opleidingHoog || 0)} (${opleidingData[2]?.percentage || 0}%)` },
               ]}
             />
           </>
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
-            <p>Geen opleidingsdata beschikbaar voor dit gebied</p>
-            <p style={{ fontSize: '12px', marginTop: '8px' }}>Deze data is niet voor alle buurten beschikbaar</p>
+            <p>Geen opleidingsdata beschikbaar</p>
+            <p style={{ fontSize: '12px', marginTop: '8px' }}>CBS publiceert deze data niet voor dit gebied</p>
           </div>
         )}
       </Card>
 
       {/* Arbeidsparticipatie */}
-      <Card title="Arbeidsparticipatie" badge={hasArbeidsData ? "data" : "placeholder"} year={hasArbeidsData ? kerncijfersJaar : undefined}>
-        {hasArbeidsData ? (
+      <Card
+        title="Arbeidsparticipatie"
+        badge={fallbackData.isLoading ? "placeholder" : (arbeidsParticipatie !== null ? (arbeidsNiveau === 'buurt' ? "data" : "fallback") : "placeholder")}
+        year={arbeidsParticipatie !== null ? kerncijfersJaar : undefined}
+        subtitle={arbeidsNiveau && arbeidsNiveau !== 'buurt' && arbeidsParticipatie !== null ? `Data van ${arbeidsNiveau}niveau` : undefined}
+      >
+        {fallbackData.isLoading ? (
+          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
+            <div style={{ width: '24px', height: '24px', border: '3px solid #eb6608', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
+            <p>Fallback data laden...</p>
+          </div>
+        ) : arbeidsParticipatie !== null ? (
           <>
             <div style={{ display: 'flex', gap: '32px', marginBottom: '24px', flexWrap: 'wrap' }}>
               <div>
                 <span style={{ fontSize: '12px', color: '#6b7280' }}>Netto arbeidsparticipatie</span>
                 <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0' }}>
-                  {Math.round(inkomen.arbeidsparticipatie || 0)}%
+                  {Math.round(arbeidsParticipatie || 0)}%
                 </p>
                 <span style={{
                   fontSize: '14px',
@@ -266,13 +359,13 @@ export function WerkInkomen() {
               <div>
                 <span style={{ fontSize: '12px', color: '#6b7280' }}>Werknemers</span>
                 <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0' }}>
-                  {Math.round(inkomen.werknemers || 0)}%
+                  {Math.round(arbeidsWerknemers || 0)}%
                 </p>
               </div>
               <div>
                 <span style={{ fontSize: '12px', color: '#6b7280' }}>Zelfstandigen</span>
                 <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0' }}>
-                  {Math.round(inkomen.zelfstandigen || 0)}%
+                  {Math.round(arbeidsZelfstandigen || 0)}%
                 </p>
               </div>
             </div>
@@ -345,8 +438,8 @@ export function WerkInkomen() {
           </>
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
-            <p>Geen arbeidsparticipatiedata beschikbaar voor dit gebied</p>
-            <p style={{ fontSize: '12px', marginTop: '8px' }}>Deze data is niet voor alle buurten beschikbaar</p>
+            <p>Geen arbeidsparticipatiedata beschikbaar</p>
+            <p style={{ fontSize: '12px', marginTop: '8px' }}>CBS publiceert deze data niet voor dit gebied</p>
           </div>
         )}
       </Card>

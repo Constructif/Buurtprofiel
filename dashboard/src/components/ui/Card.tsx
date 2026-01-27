@@ -2,8 +2,9 @@ import { useState, type ReactNode } from 'react';
 
 interface CardProps {
   title?: string;
+  subtitle?: string;
   children: ReactNode;
-  badge?: 'data' | 'placeholder' | 'info';
+  badge?: 'data' | 'placeholder' | 'info' | 'fallback';
   badgeText?: string;
   badgeTooltip?: string;
   year?: number;
@@ -12,7 +13,7 @@ interface CardProps {
   onClick?: () => void;
 }
 
-export function Card({ title, children, badge, badgeText, badgeTooltip, year, className = '', style, onClick }: CardProps) {
+export function Card({ title, subtitle, children, badge, badgeText, badgeTooltip, year, className = '', style, onClick }: CardProps) {
   const [showTooltip, setShowTooltip] = useState(false);
   return (
     <div
@@ -32,8 +33,18 @@ export function Card({ title, children, badge, badgeText, badgeTooltip, year, cl
         <div style={{ padding: '14px 18px', borderBottom: '2px solid #eb6608', flexShrink: 0, backgroundColor: '#fafafa' }}>
           <h3 style={{ fontSize: '15px', fontWeight: 600, color: '#1d1d1b', display: 'flex', alignItems: 'center', gap: '10px', margin: 0 }}>
             {title}
-            {badge === 'data' && (
-              <span style={{ fontSize: '11px', padding: '3px 8px', backgroundColor: '#dcfce7', color: '#15803d', borderRadius: '0', fontWeight: 500, display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {(badge === 'data' || badge === 'fallback') && (
+              <span style={{
+                fontSize: '11px',
+                padding: '3px 8px',
+                backgroundColor: badge === 'fallback' ? '#dbeafe' : '#dcfce7',
+                color: badge === 'fallback' ? '#1d4ed8' : '#15803d',
+                borderRadius: '0',
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}>
                 {badgeText || `CBS${year ? ` ${year}` : ''}`}
                 {badgeTooltip && (
                   <div
@@ -107,6 +118,9 @@ export function Card({ title, children, badge, badgeText, badgeTooltip, year, cl
               </span>
             )}
           </h3>
+          {subtitle && (
+            <p style={{ fontSize: '12px', color: '#6b7280', margin: '4px 0 0 0' }}>{subtitle}</p>
+          )}
         </div>
       )}
       <div style={{ padding: title ? '16px' : '0', flex: 1 }}>{children}</div>
