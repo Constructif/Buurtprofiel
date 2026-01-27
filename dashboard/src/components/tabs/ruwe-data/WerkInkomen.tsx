@@ -1,19 +1,5 @@
-import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
-import { InfoGrid } from '../../ui/InfoGrid';
-import { fetchOpleidingArbeidsData, type OpleidingArbeidsData } from '../../../services/cbs';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-} from 'recharts';
 
 function formatNumber(num: number): string {
   return num.toLocaleString('nl-NL');
@@ -30,74 +16,16 @@ function formatCurrency(num: number): string {
 
 // Nederlands gemiddelde ter vergelijking
 const NL_GEMIDDELD_INKOMEN = 27000;
-const NL_ARBEIDSPARTICIPATIE = 72;
 
 const COLORS = {
   laag: '#ef4444',    // Rood
   midden: '#6b7280',  // Grijs
   hoog: '#22c55e',    // Groen
   oranje: '#eb6608',
-  zwart: '#1d1d1b',
-  blauw: '#3498db',
 };
 
 export function WerkInkomen() {
   const { gebiedData, selectedGebied, isLoadingData } = useGebiedStore();
-
-  // State voor fallback opleiding/arbeids data
-  const [fallbackData, setFallbackData] = useState<{
-    data: OpleidingArbeidsData | null;
-    niveau: 'buurt' | 'wijk' | 'gemeente' | null;
-    isLoading: boolean;
-  }>({ data: null, niveau: null, isLoading: false });
-
-  // Effect om fallback data op te halen wanneer buurtdata ontbreekt
-  useEffect(() => {
-    if (!gebiedData || !selectedGebied) {
-      setFallbackData({ data: null, niveau: null, isLoading: false });
-      return;
-    }
-
-    const { inkomen } = gebiedData;
-
-    // Check of buurtdata beschikbaar is
-    const hasOpleidingBuurt = inkomen.laagOpgeleid !== null;
-    const hasArbeidsBuurt = inkomen.arbeidsparticipatie !== null;
-
-    if (hasOpleidingBuurt && hasArbeidsBuurt) {
-      // Buurtdata is beschikbaar, geen fallback nodig
-      setFallbackData({ data: null, niveau: 'buurt', isLoading: false });
-      return;
-    }
-
-    // Start fallback fetch
-    setFallbackData(prev => ({ ...prev, isLoading: true }));
-
-    const tryFetchFallback = async () => {
-      // Probeer eerst wijk
-      if (selectedGebied.wijkCode) {
-        const wijkData = await fetchOpleidingArbeidsData(selectedGebied.wijkCode);
-        if (wijkData && (wijkData.opleiding.laag !== null || wijkData.arbeids.participatie !== null)) {
-          setFallbackData({ data: wijkData, niveau: 'wijk', isLoading: false });
-          return;
-        }
-      }
-
-      // Probeer gemeente
-      if (selectedGebied.gemeenteCode) {
-        const gemData = await fetchOpleidingArbeidsData(selectedGebied.gemeenteCode);
-        if (gemData && (gemData.opleiding.laag !== null || gemData.arbeids.participatie !== null)) {
-          setFallbackData({ data: gemData, niveau: 'gemeente', isLoading: false });
-          return;
-        }
-      }
-
-      // Geen fallback data gevonden
-      setFallbackData({ data: null, niveau: null, isLoading: false });
-    };
-
-    tryFetchFallback();
-  }, [gebiedData, selectedGebied]);
 
   if (!selectedGebied) {
     return (
@@ -118,12 +46,6 @@ export function WerkInkomen() {
 
   const { inkomen, bevolking, kerncijfersJaar } = gebiedData;
 
-  // Bepaal welke opleiding/arbeids data te gebruiken
-  const opleidingSource = inkomen.laagOpgeleid !== null ? inkomen : fallbackData.data?.opleiding;
-  const arbeidsSource = inkomen.arbeidsparticipatie !== null ? inkomen : fallbackData.data?.arbeids;
-  const opleidingNiveau = inkomen.laagOpgeleid !== null ? 'buurt' : fallbackData.niveau;
-  const arbeidsNiveau = inkomen.arbeidsparticipatie !== null ? 'buurt' : fallbackData.niveau;
-
   // Inkomensverdeling data
   const middenInkomenPercentage = Math.max(0, 100 - (inkomen.laagInkomenPercentage || 0) - (inkomen.hoogInkomenPercentage || 0));
   const inkomenVerdelingData = [
@@ -131,55 +53,6 @@ export function WerkInkomen() {
     { name: 'Midden inkomen', value: middenInkomenPercentage, color: COLORS.midden },
     { name: 'Hoog inkomen', value: inkomen.hoogInkomenPercentage || 0, color: COLORS.hoog },
   ].filter(item => item.value > 0);
-
-  // Opleidingsniveau data (met fallback)
-  const opleidingLaag = opleidingSource && 'laag' in opleidingSource ? opleidingSource.laag : (opleidingSource as typeof inkomen)?.laagOpgeleid;
-  const opleidingMidden = opleidingSource && 'midden' in opleidingSource ? opleidingSource.midden : (opleidingSource as typeof inkomen)?.middelOpgeleid;
-  const opleidingHoog = opleidingSource && 'hoog' in opleidingSource ? opleidingSource.hoog : (opleidingSource as typeof inkomen)?.hoogOpgeleid;
-
-  const totaalOpgeleid = (opleidingLaag || 0) + (opleidingMidden || 0) + (opleidingHoog || 0);
-  const opleidingData = totaalOpgeleid > 0 ? [
-    {
-      name: 'Laag opgeleid',
-      value: opleidingLaag || 0,
-      percentage: Math.round(((opleidingLaag || 0) / totaalOpgeleid) * 100),
-      color: COLORS.laag,
-    },
-    {
-      name: 'Middelbaar opgeleid',
-      value: opleidingMidden || 0,
-      percentage: Math.round(((opleidingMidden || 0) / totaalOpgeleid) * 100),
-      color: COLORS.oranje,
-    },
-    {
-      name: 'Hoog opgeleid',
-      value: opleidingHoog || 0,
-      percentage: Math.round(((opleidingHoog || 0) / totaalOpgeleid) * 100),
-      color: COLORS.hoog,
-    },
-  ] : [];
-
-  const hasOpleidingData = opleidingData.length > 0 || fallbackData.isLoading;
-
-  // Arbeidsparticipatie data (met fallback)
-  const arbeidsParticipatie = arbeidsSource && 'participatie' in arbeidsSource ? arbeidsSource.participatie : (arbeidsSource as typeof inkomen)?.arbeidsparticipatie;
-  const arbeidsWerknemers = arbeidsSource && 'werknemers' in arbeidsSource ? arbeidsSource.werknemers : (arbeidsSource as typeof inkomen)?.werknemers;
-  const arbeidsZelfstandigen = arbeidsSource && 'zelfstandigen' in arbeidsSource ? arbeidsSource.zelfstandigen : (arbeidsSource as typeof inkomen)?.zelfstandigen;
-  const arbeidsVast = arbeidsSource && 'vast' in arbeidsSource ? arbeidsSource.vast : (arbeidsSource as typeof inkomen)?.vastContract;
-  const arbeidsFlex = arbeidsSource && 'flex' in arbeidsSource ? arbeidsSource.flex : (arbeidsSource as typeof inkomen)?.flexContract;
-
-  const hasArbeidsData = arbeidsParticipatie !== null || fallbackData.isLoading;
-  const arbeidsData = hasArbeidsData && arbeidsParticipatie !== null ? [
-    { name: 'Werknemers', value: arbeidsWerknemers || 0 },
-    { name: 'Zelfstandigen', value: arbeidsZelfstandigen || 0 },
-  ].filter(item => item.value > 0) : [];
-
-  // Contract type data
-  const hasContractData = arbeidsVast !== null || arbeidsFlex !== null;
-  const contractData = hasContractData ? [
-    { name: 'Vast contract', value: arbeidsVast || 0, color: COLORS.hoog },
-    { name: 'Flex contract', value: arbeidsFlex || 0, color: COLORS.oranje },
-  ] : [];
 
   // Uitkeringen data
   const uitkeringenData = [
@@ -199,7 +72,6 @@ export function WerkInkomen() {
 
   // Verschil met NL gemiddelde
   const inkomenVerschil = inkomen.gemiddeld - NL_GEMIDDELD_INKOMEN;
-  const participatieVerschil = (arbeidsParticipatie || 0) - NL_ARBEIDSPARTICIPATIE;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
@@ -274,174 +146,32 @@ export function WerkInkomen() {
         </div>
       </Card>
 
-      {/* Opleidingsniveau */}
-      <Card
-        title="Opleidingsniveau"
-        badge={fallbackData.isLoading ? "placeholder" : (opleidingData.length > 0 ? (opleidingNiveau === 'buurt' ? "data" : "fallback") : "placeholder")}
-        year={opleidingData.length > 0 ? kerncijfersJaar : undefined}
-        subtitle={opleidingNiveau && opleidingNiveau !== 'buurt' && opleidingData.length > 0 ? `Data van ${opleidingNiveau}niveau` : undefined}
-      >
-        {fallbackData.isLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
-            <div style={{ width: '24px', height: '24px', border: '3px solid #eb6608', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-            <p>Fallback data laden...</p>
-          </div>
-        ) : opleidingData.length > 0 ? (
-          <>
-            <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '16px' }}>
-              Hoogst behaald onderwijsniveau (15-75 jaar)
-            </p>
-            <div style={{ height: '280px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={opleidingData} layout="vertical" margin={{ left: 120, right: 30 }}>
-                  <XAxis type="number" unit="%" domain={[0, 100]} />
-                  <YAxis type="category" dataKey="name" tick={{ fontSize: 12 }} width={115} />
-                  <Tooltip
-                    formatter={(_value, _name, props) => {
-                      const item = props.payload as { value: number; percentage: number };
-                      return [`${formatNumber(item.value)} personen (${item.percentage}%)`, 'Aantal'];
-                    }}
-                  />
-                  <Bar dataKey="percentage" radius={[0, 4, 4, 0]}>
-                    {opleidingData.map((entry, index) => (
-                      <Cell key={index} fill={entry.color} />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <InfoGrid
-              items={[
-                { label: 'Laag opgeleid', value: `${formatNumber(opleidingLaag || 0)} (${opleidingData[0]?.percentage || 0}%)` },
-                { label: 'Middelbaar opgeleid', value: `${formatNumber(opleidingMidden || 0)} (${opleidingData[1]?.percentage || 0}%)` },
-                { label: 'Hoog opgeleid', value: `${formatNumber(opleidingHoog || 0)} (${opleidingData[2]?.percentage || 0}%)` },
-              ]}
-            />
-          </>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
-            <p>Geen opleidingsdata beschikbaar</p>
-            <p style={{ fontSize: '12px', marginTop: '8px' }}>CBS publiceert deze data niet voor dit gebied</p>
-          </div>
-        )}
+      {/* Opleidingsniveau - Niet beschikbaar */}
+      <Card title="Opleidingsniveau" badge="info" badgeText="Niet beschikbaar">
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6b7280' }}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 16px', opacity: 0.5 }}>
+            <path d="M12 14l9-5-9-5-9 5 9 5z" />
+            <path d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 14l9-5-9-5-9 5 9 5zm0 0l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14zm-4 6v-7.5l4-2.222" />
+          </svg>
+          <p style={{ fontWeight: 500, marginBottom: '8px' }}>Opleidingsdata niet beschikbaar</p>
+          <p style={{ fontSize: '13px', maxWidth: '400px', margin: '0 auto', lineHeight: 1.5 }}>
+            CBS publiceert geen opleidingsniveau gegevens op buurt-, wijk- of gemeenteniveau in de Kerncijfers Wijken en Buurten dataset.
+          </p>
+        </div>
       </Card>
 
-      {/* Arbeidsparticipatie */}
-      <Card
-        title="Arbeidsparticipatie"
-        badge={fallbackData.isLoading ? "placeholder" : (arbeidsParticipatie !== null ? (arbeidsNiveau === 'buurt' ? "data" : "fallback") : "placeholder")}
-        year={arbeidsParticipatie !== null ? kerncijfersJaar : undefined}
-        subtitle={arbeidsNiveau && arbeidsNiveau !== 'buurt' && arbeidsParticipatie !== null ? `Data van ${arbeidsNiveau}niveau` : undefined}
-      >
-        {fallbackData.isLoading ? (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
-            <div style={{ width: '24px', height: '24px', border: '3px solid #eb6608', borderTopColor: 'transparent', borderRadius: '50%', margin: '0 auto 12px', animation: 'spin 1s linear infinite' }} />
-            <p>Fallback data laden...</p>
-          </div>
-        ) : arbeidsParticipatie !== null ? (
-          <>
-            <div style={{ display: 'flex', gap: '32px', marginBottom: '24px', flexWrap: 'wrap' }}>
-              <div>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Netto arbeidsparticipatie</span>
-                <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0' }}>
-                  {Math.round(arbeidsParticipatie || 0)}%
-                </p>
-                <span style={{
-                  fontSize: '14px',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  backgroundColor: participatieVerschil >= 0 ? '#dcfce7' : '#fee2e2',
-                  color: participatieVerschil >= 0 ? '#15803d' : '#dc2626',
-                }}>
-                  {participatieVerschil >= 0 ? '+' : ''}{Math.round(participatieVerschil)}% t.o.v. NL
-                </span>
-              </div>
-              <div>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Werknemers</span>
-                <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0' }}>
-                  {Math.round(arbeidsWerknemers || 0)}%
-                </p>
-              </div>
-              <div>
-                <span style={{ fontSize: '12px', color: '#6b7280' }}>Zelfstandigen</span>
-                <p style={{ fontSize: '28px', fontWeight: 600, margin: '4px 0' }}>
-                  {Math.round(arbeidsZelfstandigen || 0)}%
-                </p>
-              </div>
-            </div>
-
-            {/* Werknemers vs Zelfstandigen pie chart */}
-            {arbeidsData.length > 0 && (
-              <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px' }}>
-                <div>
-                  <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-                    Verdeling werkenden
-                  </p>
-                  <div style={{ height: '200px' }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                        <Pie
-                          data={arbeidsData}
-                          dataKey="value"
-                          nameKey="name"
-                          cx="50%"
-                          cy="50%"
-                          outerRadius={70}
-                          label={({ name, value }) => `${name}: ${Math.round(value)}%`}
-                        >
-                          <Cell fill={COLORS.oranje} />
-                          <Cell fill={COLORS.zwart} />
-                        </Pie>
-                        <Tooltip formatter={(value) => `${Math.round(value as number)}%`} />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Contract types */}
-                {hasContractData && (
-                  <div>
-                    <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-                      Type dienstverband (werknemers)
-                    </p>
-                    <div style={{ height: '60px', display: 'flex', borderRadius: '4px', overflow: 'hidden', marginBottom: '8px' }}>
-                      {contractData.map((item) => (
-                        <div
-                          key={item.name}
-                          style={{
-                            width: `${item.value}%`,
-                            backgroundColor: item.color,
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: 'white',
-                            fontSize: '12px',
-                            fontWeight: 500,
-                          }}
-                        >
-                          {item.value > 15 && `${Math.round(item.value)}%`}
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: '16px' }}>
-                      {contractData.map((item) => (
-                        <div key={item.name} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <div style={{ width: '12px', height: '12px', backgroundColor: item.color, borderRadius: '2px' }} />
-                          <span style={{ fontSize: '12px', color: '#6b7280' }}>{item.name}: {Math.round(item.value)}%</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        ) : (
-          <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
-            <p>Geen arbeidsparticipatiedata beschikbaar</p>
-            <p style={{ fontSize: '12px', marginTop: '8px' }}>CBS publiceert deze data niet voor dit gebied</p>
-          </div>
-        )}
+      {/* Arbeidsparticipatie - Niet beschikbaar */}
+      <Card title="Arbeidsparticipatie" badge="info" badgeText="Niet beschikbaar">
+        <div style={{ textAlign: 'center', padding: '40px 20px', color: '#6b7280' }}>
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ margin: '0 auto 16px', opacity: 0.5 }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+          <p style={{ fontWeight: 500, marginBottom: '8px' }}>Arbeidsparticipatiedata niet beschikbaar</p>
+          <p style={{ fontSize: '13px', maxWidth: '400px', margin: '0 auto', lineHeight: 1.5 }}>
+            CBS publiceert geen arbeidsparticipatie gegevens op buurt-, wijk- of gemeenteniveau in de Kerncijfers Wijken en Buurten dataset.
+          </p>
+        </div>
       </Card>
 
       {/* Uitkeringen */}

@@ -954,57 +954,6 @@ async function fetchGemeenteBevolking(gemeenteCode: string): Promise<{
   }
 }
 
-// Interface voor opleiding/arbeids fallback data
-export interface OpleidingArbeidsData {
-  opleiding: {
-    laag: number | null;
-    midden: number | null;
-    hoog: number | null;
-  };
-  arbeids: {
-    participatie: number | null;
-    werknemers: number | null;
-    zelfstandigen: number | null;
-    vast: number | null;
-    flex: number | null;
-  };
-}
-
-// Haal opleiding/arbeids data op voor specifiek gebied (voor fallback)
-export async function fetchOpleidingArbeidsData(code: string): Promise<OpleidingArbeidsData | null> {
-  try {
-    const response = await fetch(`${CBS_BASE_URL}/85984NED/Observations?$filter=WijkenEnBuurten eq '${code}'`);
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const data = await response.json();
-    const kenmerken = data.value || [];
-
-    const getKenmerk = (measure: string): number | null => {
-      const item = kenmerken.find((k: { Measure: string; Value?: number; StringValue?: string }) => k.Measure === measure);
-      if (!item) return null;
-      const val = item.Value ?? item.StringValue;
-      return typeof val === 'number' ? val : (parseFloat(val as string) || null);
-    };
-
-    return {
-      opleiding: {
-        laag: getKenmerk('2018700'),
-        midden: getKenmerk('2018740'),
-        hoog: getKenmerk('2018790'),
-      },
-      arbeids: {
-        participatie: getKenmerk('M001796_2'),
-        werknemers: getKenmerk('2021320'),
-        zelfstandigen: getKenmerk('2021380'),
-        vast: getKenmerk('2021330'),
-        flex: getKenmerk('2021340'),
-      },
-    };
-  } catch (e) {
-    console.warn('Kon opleiding/arbeids data niet ophalen:', e);
-    return null;
-  }
-}
+// NOTE: Opleiding/arbeidsparticipatie data (measure codes 2018700, 2018740, 2018790, M001796_2, etc.)
+// zijn gedefinieerd in CBS 85984NED maar bevatten geen waarden op buurt/wijk/gemeente niveau.
+// CBS publiceert deze data alleen op landelijk niveau via andere datasets.
