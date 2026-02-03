@@ -14,7 +14,7 @@ import {
 import { Card } from '../../ui/Card';
 
 // Fix voor Leaflet default marker icons in Vite
-// @ts-ignore
+// @ts-expect-error - Leaflet internal property needs to be reset for Vite compatibility
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',

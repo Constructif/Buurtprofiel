@@ -86,7 +86,7 @@ export function GebiedSearch() {
       // Laad ALLE data parallel, inclusief voorzieningen
       // Dit zorgt ervoor dat alle tabs data hebben voordat loading klaar is
       const [data, trendData, bevolkingsDynamiek, herkomstLandGemeente] = await Promise.all([
-        fetchCBSData(gebied.code, gebied.naam),
+        fetchCBSData(gebied.code, gebied.naam, gebied),
         fetchCriminaliteitTrend(gebied.code),
         gemeenteCode ? fetchVerhuisbewegingen(gemeenteCode) : Promise.resolve({ jaren: [] }),
         gemeenteCode ? fetchHerkomstLandData(gemeenteCode) : Promise.resolve({ totaal: 0, landen: [] }),

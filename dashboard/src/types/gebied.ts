@@ -1,3 +1,5 @@
+import type { WerkInkomenData } from './werkInkomen';
+
 export type GebiedType = 'buurt' | 'wijk' | 'gemeente';
 
 export interface Gebied {
@@ -48,7 +50,7 @@ export interface WoningenData {
 }
 
 export interface InkomenData {
-  gemiddeld: number;
+  gemiddeld: number | null;  // null als niet beschikbaar (privacy/onvoldoende samples)
   laagInkomenPercentage: number;
   hoogInkomenPercentage: number;
 }
@@ -170,6 +172,7 @@ export interface GebiedData {
   bevolkingsDynamiek?: BevolkingsDynamiek;
   herkomstLandGemeente?: HerkomstLandData;  // Gedetailleerde herkomst per land (alleen gemeente)
   jeugdzorgWmo?: JeugdzorgWmoData;  // Jeugdzorg en WMO data
+  werkInkomen?: WerkInkomenData;  // Werk & Inkomen data (opleiding, werkgelegenheid, uitkeringen)
   gemeenteNaam?: string;  // Voor weergave bij verhuisbewegingen
   dataJaar?: number;  // Criminaliteit jaar
   kerncijfersJaar?: number;  // Kerncijfers jaar (demografisch, woningen, etc.)

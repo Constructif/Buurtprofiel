@@ -1,8 +1,12 @@
 import type { Gebied, GebiedData, CriminaliteitTrend, VeiligheidsScoreVergelijking, BevolkingsDynamiek, HerkomstLandData } from '../types/gebied';
+import type { UitkeringenData, OpleidingsniveauData, WerkgelegenheidData } from '../types/werkInkomen';
 
 const CBS_BASE_URL = 'https://datasets.cbs.nl/odata/v1/CBS';
 const CBS_CRIME_URL = 'https://dataderden.cbs.nl/ODataApi/OData/47018NED';
 const CBS_PC4_URL = 'https://opendata.cbs.nl/ODataApi/odata/85640NED';  // Herkomstland per PC4
+const CBS_UITKERINGEN_URL = 'https://opendata.cbs.nl/ODataApi/OData/86003NED';  // Uitkeringen per wijk/buurt 2024
+const CBS_OPLEIDING_URL = 'https://opendata.cbs.nl/ODataApi/odata/86052NED';  // Opleidingsniveau per wijk/buurt 2023
+const CBS_KERNCIJFERS_2023_URL = 'https://datasets.cbs.nl/odata/v1/CBS/85618NED';  // Kerncijfers 2023 (heeft werkgelegenheidsdata)
 
 // Cache voor kerncijfers jaar (hoeft maar 1x opgehaald te worden)
 let kerncijfersJaarCache: number | null = null;
@@ -55,9 +59,7 @@ export async function loadAllGebieden(): Promise<Gebied[]> {
   return rawData.map((item: { Identifier: string; Title: string }) => {
     const code = item.Identifier;
     let wijkCode: string | undefined;
-    let wijkNaam: string | undefined;
     let gemeenteCode: string | undefined;
-    let gemeenteNaam: string | undefined;
     let type: 'buurt' | 'wijk' | 'gemeente';
 
     if (code.startsWith('BU')) {
@@ -75,8 +77,8 @@ export async function loadAllGebieden(): Promise<Gebied[]> {
       type = 'gemeente'; // fallback
     }
 
-    wijkNaam = wijkCode ? dataMap[wijkCode] : undefined;
-    gemeenteNaam = gemeenteCode ? dataMap[gemeenteCode] : undefined;
+    const wijkNaam = wijkCode ? dataMap[wijkCode] : undefined;
+    const gemeenteNaam = gemeenteCode ? dataMap[gemeenteCode] : undefined;
 
     return {
       code,
@@ -91,11 +93,13 @@ export async function loadAllGebieden(): Promise<Gebied[]> {
 }
 
 // Haal CBS kerncijfers op voor een gebied
-export async function fetchCBSData(code: string, naam: string): Promise<GebiedData> {
-  // 1. Kerncijfers (85984NED) - Demografische data + jaar parallel ophalen
-  const [response1, kerncijfersJaar] = await Promise.all([
+export async function fetchCBSData(code: string, naam: string, gebied?: Gebied): Promise<GebiedData> {
+  // 1. Kerncijfers (85984NED) - Demografische data + jaar + opleidingsniveau + werkgelegenheid parallel ophalen
+  const [response1, kerncijfersJaar, opleidingData, werkgelegenheidData] = await Promise.all([
     fetch(`${CBS_BASE_URL}/85984NED/Observations?$filter=WijkenEnBuurten eq '${code}'`),
     fetchKerncijfersJaar(),
+    fetchOpleidingsniveauData(code),  // Dataset 86052NED voor buurt/wijk niveau
+    fetchWerkgelegenheidData(code),   // Dataset 85618NED (2023) voor werkgelegenheid
   ]);
 
   if (!response1.ok) {
@@ -110,7 +114,37 @@ export async function fetchCBSData(code: string, naam: string): Promise<GebiedDa
   // We halen alleen totaal misdrijven (0.0.0) voor het meest recente jaar
   const { data: criminaliteit, jaar: dataJaar } = await fetchCriminaliteitData(code);
 
-  return processCBSData(code, naam, buurtkenmerken, criminaliteit, dataJaar, kerncijfersJaar);
+  // 3. Verwerk de data
+  const result = processCBSData(code, naam, buurtkenmerken, criminaliteit, dataJaar, kerncijfersJaar, opleidingData, werkgelegenheidData);
+
+  // 4. Fallback naar gemeente data voor werkgelegenheid/opleiding als niet beschikbaar op buurt/wijk niveau
+  if (gebied && (gebied.type === 'buurt' || gebied.type === 'wijk') && gebied.gemeenteCode && result.werkInkomen) {
+    const werkgelegenheidHeeftData = result.werkInkomen.werkgelegenheid.arbeidsparticipatie !== null;
+    const opleidingHeeftData = result.werkInkomen.opleiding.laag !== null;
+
+    // Als werkgelegenheid geen data heeft, haal gemeente data op uit 2023 dataset
+    if (!werkgelegenheidHeeftData) {
+      const gemeenteWerkgelegenheid = await fetchWerkgelegenheidData(gebied.gemeenteCode);
+
+      if (gemeenteWerkgelegenheid.arbeidsparticipatie !== null) {
+        result.werkInkomen.werkgelegenheid = gemeenteWerkgelegenheid;
+        result.werkInkomen.werkgelegenheidIsGemeenteData = true;
+        result.werkInkomen.werkgelegenheidGemeenteNaam = gebied.gemeenteNaam;
+      }
+    }
+
+    // Opleiding fallback (voor het geval 86052NED geen data heeft)
+    if (!opleidingHeeftData) {
+      const gemeenteOpleidingData = await fetchOpleidingsniveauData(gebied.gemeenteCode);
+
+      if (gemeenteOpleidingData.laag !== null) {
+        result.werkInkomen.opleiding = gemeenteOpleidingData;
+        result.werkInkomen.opleidingIsGemeenteData = true;
+      }
+    }
+  }
+
+  return result;
 }
 
 // Haal criminaliteitsdata op voor een specifiek gebied
@@ -209,7 +243,9 @@ function processCBSData(
   buurtkenmerken: Array<{ Measure: string; Value?: number; StringValue?: string }>,
   criminaliteit: Record<string, number>,
   dataJaar: number,
-  kerncijfersJaar: number
+  kerncijfersJaar: number,
+  opleidingData?: OpleidingsniveauData,
+  werkgelegenheidData?: WerkgelegenheidData
 ): GebiedData {
   // Helper om kenmerk te vinden
   const getKenmerk = (measure: string): number | null => {
@@ -313,9 +349,10 @@ function processCBSData(
       vrijstaandPercentage: getKenmerk('ZW10320') ?? 0,
     },
     inkomen: {
-      gemiddeld: (getKenmerk('M000223') ?? 0) * 1000,
-      laagInkomenPercentage: getKenmerk('T001345') ?? 0,
-      hoogInkomenPercentage: getKenmerk('A025294') ?? 0,
+      // Gemiddeld besteedbaar inkomen - behoud null als niet beschikbaar (i.p.v. €0 tonen)
+      gemiddeld: getKenmerk('M000223') !== null ? getKenmerk('M000223')! * 1000 : null,
+      laagInkomenPercentage: getKenmerk('D000187') ?? 0,  // 40% personen met laagste inkomen
+      hoogInkomenPercentage: getKenmerk('D000185') ?? 0,  // 20% personen met hoogste inkomen
     },
     criminaliteit: {
       totaal: totaalMisdrijven,
@@ -361,6 +398,34 @@ function processCBSData(
       jeugdzorgPercentage: getKenmerk('A045561'),    // Percentage jongeren met jeugdzorg
       wmoAantal: getKenmerk('M001342_1'),            // WMO-cliënten
       wmoPer1000: getKenmerk('M001342_2'),           // WMO-cliënten relatief (per 1000)
+    },
+    werkInkomen: {
+      opleiding: {
+        // Gebruik opleidingsdata van dataset 86052NED (buurt/wijk niveau) als beschikbaar
+        // Anders fallback naar kerncijfers 85984NED (vaak null op buurt niveau)
+        laag: opleidingData?.laag ?? getKenmerk('2018700'),
+        midden: opleidingData?.midden ?? getKenmerk('2018740'),
+        hoog: opleidingData?.hoog ?? getKenmerk('2018790'),
+      },
+      werkgelegenheid: {
+        // Gebruik werkgelegenheidsdata van dataset 85618NED (2023) die wel complete data heeft
+        // Dataset 85984NED (2024) heeft GEEN werkgelegenheidsdata - komt pas begin 2026
+        arbeidsparticipatie: werkgelegenheidData?.arbeidsparticipatie ?? null,
+        werknemers: werkgelegenheidData?.werknemers ?? null,
+        zelfstandigen: werkgelegenheidData?.zelfstandigen ?? null,
+        vast: werkgelegenheidData?.vast ?? null,
+        flexibel: werkgelegenheidData?.flexibel ?? null,
+      },
+      uitkeringen: {
+        bijstand: getKenmerk('D006842'),      // Personen met bijstand (uit kerncijfers)
+        ww: getKenmerk('D001827'),            // Personen met WW
+        ao: getKenmerk('D006837'),            // Personen met AO (arbeidsongeschiktheid)
+        aow: getKenmerk('D000193'),           // Personen met AOW
+        bijstandPer1000: null,                // Berekenen in component
+        wwPer1000: null,
+        aoPer1000: null,
+      },
+      dataJaar: kerncijfersJaar,
     },
     dataJaar,
     kerncijfersJaar,
@@ -933,5 +998,187 @@ async function fetchGemeenteBevolking(gemeenteCode: string): Promise<{
   } catch (e) {
     console.warn('Kon gemeente bevolking niet ophalen:', e);
     return undefined;
+  }
+}
+
+// Haal opleidingsniveau data op voor een gebied (CBS 86052NED)
+// Deze dataset bevat absolute aantallen per opleidingsniveau op buurt/wijk/gemeente niveau
+export async function fetchOpleidingsniveauData(code: string): Promise<OpleidingsniveauData> {
+  const emptyResult: OpleidingsniveauData = {
+    laag: null,
+    midden: null,
+    hoog: null,
+  };
+
+  try {
+    // Opleidingsniveau codes
+    const niveaus = [
+      { code: '2018700', field: 'laag' },   // Basisonderwijs, vmbo, mbo1
+      { code: '2018740', field: 'midden' }, // Havo, vwo, mbo2-4
+      { code: '2018790', field: 'hoog' },   // Hbo, wo
+    ];
+
+    const aantallen: Record<string, number> = {};
+
+    // Haal aantallen op voor elk niveau (parallel)
+    const promises = niveaus.map(async (niveau) => {
+      try {
+        // Filter op puntschatting (MOG0095) en specifieke buurt/wijk/gemeente
+        // Code moet exact matchen met startswith voor flexibiliteit
+        const url = `${CBS_OPLEIDING_URL}/TypedDataSet?$filter=startswith(WijkenEnBuurten,'${code}') and Opleidingsniveau eq '${niveau.code}' and Marges eq 'MOG0095'&$select=Bevolking15Tot75Jaar_2&$top=1`;
+        const response = await fetch(url);
+
+        if (response.ok) {
+          const data = await response.json();
+          const value = data.value?.[0]?.Bevolking15Tot75Jaar_2;
+          return { field: niveau.field, value: value !== undefined && value !== null ? Number(value) : 0 };
+        }
+      } catch {
+        // Ignore errors for individual levels
+      }
+      return { field: niveau.field, value: 0 };
+    });
+
+    const results = await Promise.all(promises);
+    results.forEach(r => {
+      aantallen[r.field] = r.value;
+    });
+
+    // Bereken totaal en percentages
+    const totaal = aantallen.laag + aantallen.midden + aantallen.hoog;
+
+    if (totaal === 0) {
+      // Geen data beschikbaar
+      return emptyResult;
+    }
+
+    // Converteer naar percentages
+    return {
+      laag: Math.round((aantallen.laag / totaal) * 1000) / 10,    // 1 decimaal
+      midden: Math.round((aantallen.midden / totaal) * 1000) / 10,
+      hoog: Math.round((aantallen.hoog / totaal) * 1000) / 10,
+    };
+  } catch (e) {
+    console.warn('Kon opleidingsniveau data niet ophalen:', e);
+    return emptyResult;
+  }
+}
+
+// Haal werkgelegenheidsdata op voor een gebied (CBS 85618NED - Kerncijfers 2023)
+// Dataset 85984NED (2024) heeft GEEN werkgelegenheidsdata - die komt pas begin 2026
+// Daarom gebruiken we de 2023 dataset die wel complete data heeft
+export async function fetchWerkgelegenheidData(code: string): Promise<WerkgelegenheidData> {
+  const emptyResult: WerkgelegenheidData = {
+    arbeidsparticipatie: null,
+    werknemers: null,
+    zelfstandigen: null,
+    vast: null,
+    flexibel: null,
+  };
+
+  try {
+    // Measures voor werkgelegenheid
+    const measures = [
+      { code: 'M001796_2', field: 'arbeidsparticipatie' },  // Netto arbeidsparticipatie (%)
+      { code: '2021320', field: 'werknemers' },             // % Werknemers
+      { code: '2021380', field: 'zelfstandigen' },          // % Zelfstandigen
+      { code: '2021330', field: 'vast' },                   // % Werknemers vast contract
+      { code: '2021340', field: 'flexibel' },               // % Werknemers flexibel contract
+    ];
+
+    // Bouw filter voor alle measures tegelijk
+    const measureFilter = measures.map(m => `Measure eq '${m.code}'`).join(' or ');
+    const url = `${CBS_KERNCIJFERS_2023_URL}/Observations?$filter=WijkenEnBuurten eq '${code}' and (${measureFilter})`;
+
+    const response = await fetch(url);
+    if (!response.ok) {
+      return emptyResult;
+    }
+
+    const data = await response.json();
+    const observations = data.value || [];
+
+    // Parse resultaten
+    const results: Record<string, number | null> = {};
+    for (const measure of measures) {
+      const obs = observations.find((o: { Measure: string; Value?: number }) => o.Measure === measure.code);
+      results[measure.field] = obs?.Value ?? null;
+    }
+
+    return {
+      arbeidsparticipatie: results.arbeidsparticipatie ?? null,
+      werknemers: results.werknemers ?? null,
+      zelfstandigen: results.zelfstandigen ?? null,
+      vast: results.vast ?? null,
+      flexibel: results.flexibel ?? null,
+    };
+  } catch (e) {
+    console.warn('Kon werkgelegenheidsdata niet ophalen:', e);
+    return emptyResult;
+  }
+}
+
+// Haal uitkeringendata op voor een gebied (CBS 86003NED)
+export async function fetchUitkeringenData(code: string, bevolking: number): Promise<UitkeringenData> {
+  const emptyResult: UitkeringenData = {
+    bijstand: null,
+    ww: null,
+    ao: null,
+    aow: null,
+    bijstandPer1000: null,
+    wwPer1000: null,
+    aoPer1000: null,
+  };
+
+  try {
+    // Format code voor CBS API (moet 8 karakters zijn met trailing spaties)
+    const paddedCode = code.padEnd(8, ' ');
+
+    // Uitkeringstypes die we willen ophalen
+    // SoortUitkering codes uit 86003NED:
+    // T001111 = Totaal, A048386 = Bijstand, A048387 = WW, A048388 = AO, A048389 = AOW
+    const uitkeringTypes = [
+      { code: 'A048386', field: 'bijstand' },  // Bijstand (Participatiewet)
+      { code: 'A048387', field: 'ww' },        // WW (Werkloosheidsuitkering)
+      { code: 'A048388', field: 'ao' },        // AO (Arbeidsongeschiktheid)
+      { code: 'A048389', field: 'aow' },       // AOW (Ouderdomspensioen)
+    ];
+
+    const results: Record<string, number | null> = {};
+
+    // Haal data op voor elke uitkeringstype
+    for (const type of uitkeringTypes) {
+      try {
+        const url = `${CBS_UITKERINGEN_URL}/TypedDataSet?$filter=WijkenEnBuurten eq '${paddedCode}' and SoortUitkering eq '${type.code}'&$select=PersonenMetEenUitkering_1`;
+        const response = await fetch(url);
+
+        if (response.ok) {
+          const data = await response.json();
+          const value = data.value?.[0]?.PersonenMetEenUitkering_1;
+          results[type.field] = value !== undefined && value !== null ? Number(value) : null;
+        }
+      } catch {
+        results[type.field] = null;
+      }
+    }
+
+    // Bereken per 1000 inwoners
+    const calcPer1000 = (value: number | null): number | null => {
+      if (value === null || bevolking === 0) return null;
+      return Math.round((value / bevolking) * 1000 * 10) / 10;
+    };
+
+    return {
+      bijstand: results.bijstand ?? null,
+      ww: results.ww ?? null,
+      ao: results.ao ?? null,
+      aow: results.aow ?? null,
+      bijstandPer1000: calcPer1000(results.bijstand ?? null),
+      wwPer1000: calcPer1000(results.ww ?? null),
+      aoPer1000: calcPer1000(results.ao ?? null),
+    };
+  } catch (e) {
+    console.warn('Kon uitkeringen data niet ophalen:', e);
+    return emptyResult;
   }
 }
