@@ -2,7 +2,7 @@ import { Header } from './components/layout/Header';
 import { MainTabs } from './components/layout/MainTabs';
 import { SubTabs } from './components/layout/SubTabs';
 import { useGebiedStore } from './store/gebiedStore';
-import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn, WerkInkomen } from './components/tabs/ruwe-data';
+import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn, WerkInkomen, Leefomgeving } from './components/tabs/ruwe-data';
 import { EigenOnderzoekPlaceholder } from './components/tabs/eigen-onderzoek/Placeholder';
 
 function App() {
@@ -30,7 +30,7 @@ function App() {
       case 'economie':
         return <WerkInkomen />;
       case 'leefomgeving':
-        return <PlaceholderTab name="Leefomgeving" />;
+        return <Leefomgeving />;
       default:
         return <Overzicht />;
     }
@@ -48,15 +48,6 @@ function App() {
 
         <div style={{ marginTop: '20px' }}>{renderContent()}</div>
       </main>
-    </div>
-  );
-}
-
-function PlaceholderTab({ name }: { name: string }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '80px 20px' }}>
-      <h2 style={{ fontSize: '24px', fontWeight: 600, color: '#1d1d1b', marginBottom: '8px' }}>{name}</h2>
-      <p style={{ color: '#6b7280' }}>Deze tab wordt later uitgebreid.</p>
     </div>
   );
 }
