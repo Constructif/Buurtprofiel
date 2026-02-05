@@ -353,6 +353,21 @@ function processCBSData(
       gemiddeld: getKenmerk('M000223') !== null ? getKenmerk('M000223')! * 1000 : null,
       laagInkomenPercentage: getKenmerk('D000187') ?? 0,  // 40% personen met laagste inkomen
       hoogInkomenPercentage: getKenmerk('D000185') ?? 0,  // 20% personen met hoogste inkomen
+      // Opleidingsniveau (15-75 jaar) - data komt uit werkInkomen
+      laagOpgeleid: null,
+      middelOpgeleid: null,
+      hoogOpgeleid: null,
+      // Arbeidsparticipatie (15-75 jaar) - data komt uit werkInkomen
+      arbeidsparticipatie: null,
+      werknemers: null,
+      zelfstandigen: null,
+      vastContract: null,
+      flexContract: null,
+      // Uitkeringen - data komt uit werkInkomen
+      bijstandAantal: null,
+      wwAantal: null,
+      aoAantal: null,
+      aowAantal: null,
     },
     criminaliteit: {
       totaal: totaalMisdrijven,
