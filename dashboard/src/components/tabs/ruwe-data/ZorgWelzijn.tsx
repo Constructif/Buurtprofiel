@@ -14,35 +14,38 @@ import {
   Legend
 } from 'recharts';
 
-// NL Referentiewaarden 2022 (hardcoded om extra API call te vermijden)
+// NL Referentiewaarden (RIVM Gezondheidsmonitor 2022, dataset 50120NED, NL01, 18+)
+// Bron: dataderden.cbs.nl/ODataApi/OData/50120NED, Leeftijd=20300, Marges=MW00000
 const NL_REFERENTIES = {
-  eenzaam: 46.2,
-  ernstigEenzaam: 13.2,
-  emotioneelEenzaam: 35.0,
-  sociaalEenzaam: 25.0,
-  psychischeKlachten: 18.5,
-  angstDepressie: 8.5,
-  stress: 17.0,
-  emotioneleSteun: 6.2,
-  veerkracht: 14.8,
-  mantelzorger: 14.5,
-  vrijwilligerswerk: 25.0,
-  ervarenGezondheid: 75.0,
-  langdurigeAandoeningen: 32.0,
-  beperkt: 30.2,
-  moeiteRondkomen: 18.0,
+  eenzaam: 49.2,              // Eenzaam_27
+  ernstigEenzaam: 14.4,       // ErnstigZeerErnstigEenzaam_28
+  emotioneelEenzaam: 30.1,    // EmotioneelEenzaam_29
+  sociaalEenzaam: 35.3,       // SociaalEenzaam_30
+  psychischeKlachten: 22.2,   // PsychischeKlachten_20
+  angstDepressie: 10.2,       // HoogRisicoOpAngstOfDepressie_25
+  stress: 20.7,               // HeelVeelStressInAfgelopen4Weken_26
+  emotioneleSteun: 6.4,       // MistEmotioneleSteun_23
+  veerkracht: 17.3,           // ZeerLageVeerkracht_21
+  mantelzorger: 13.5,         // Mantelzorger_31
+  vrijwilligerswerk: 23.8,    // Vrijwilligerswerk_32
+  ervarenGezondheid: 69.0,    // ErvarenGezondheidGoedZeerGoed_4
+  langdurigeAandoeningen: 33.4, // EenOfMeerLangdurigeAandoeningen_16
+  beperkt: 33.8,              // BeperktVanwegeGezondheid_17
+  moeiteRondkomen: 20.5,      // MoeiteMetRondkomen_33
 };
 
 // Indicatoren waar hoger = beter
 const HOGER_IS_BETER = ['vrijwilligerswerk', 'ervarenGezondheid'];
 
 // Progress bar schalen per indicator
+// Schaal = ~2x NL gemiddelde, zodat afwijkingen visueel duidelijk zichtbaar zijn
+// en de bar niet altijd vol staat. De max-waarden zijn afgerond op 5-tallen.
 const MENTALE_GEZONDHEID_SCHALEN: Record<string, number> = {
-  angstDepressie: 25,
-  psychischeKlachten: 40,
-  stress: 40,
-  emotioneleSteun: 20,
-  veerkracht: 30,
+  angstDepressie: 25,     // NL: 10.2%, max 25% geeft ruimte voor hoge uitslagen
+  psychischeKlachten: 45, // NL: 22.2%, max 45% (~2x NL)
+  stress: 45,             // NL: 20.7%, max 45% (~2x NL)
+  emotioneleSteun: 15,    // NL: 6.4%, max 15% (~2x NL)
+  veerkracht: 35,         // NL: 17.3%, max 35% (~2x NL)
 };
 
 // Badge configuratie per sectie (jaar wordt dynamisch toegevoegd)

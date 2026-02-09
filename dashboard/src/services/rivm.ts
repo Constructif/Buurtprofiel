@@ -166,7 +166,7 @@ async function fetchZorgVergelijking(
   gemeenteNaam?: string
 ): Promise<ZorgVergelijking> {
   const vergelijking: ZorgVergelijking = {
-    nederland: { naam: 'Nederland', eenzaam: 46.2 } // Referentiewaarde 2022
+    nederland: { naam: 'Nederland', eenzaam: 49.2 } // RIVM Gezondheidsmonitor 2022, dataset 50120NED (Eenzaam_27, NL01, 18+)
   };
 
   const promises: Promise<void>[] = [];

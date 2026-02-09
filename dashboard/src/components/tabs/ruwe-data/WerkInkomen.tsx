@@ -13,22 +13,22 @@ import {
   Cell
 } from 'recharts';
 
-// NL Referentiewaarden (CBS 2024)
+// NL Referentiewaarden (CBS kerncijfers 85984NED + 86052NED + 85618NED)
 const NL_REFERENTIES = {
   // Inkomen (CBS definitie: 40% laagste / 20% hoogste inkomensverdeling)
   gemiddeldInkomen: 37200,
   laagInkomen: 40.0,   // 40% personen met laagste inkomen (D000187)
   hoogInkomen: 20.0,   // 20% personen met hoogste inkomen (D000185)
-  // Opleiding (15-74 jaar)
-  opleidingLaag: 21.5,
-  opleidingMidden: 40.8,
-  opleidingHoog: 37.7,
-  // Werkgelegenheid
-  arbeidsparticipatie: 72.1,
-  // Uitkeringen (per 1000 inwoners)
-  bijstandPer1000: 22,
-  wwPer1000: 14,
-  aoPer1000: 58,
+  // Opleiding 15-75 jaar (CBS 86052NED, NL01, berekend: count/totaal*100)
+  opleidingLaag: 26.3,    // 3.537.840 / 13.471.360 (basisonderwijs, vmbo, mbo1)
+  opleidingMidden: 41.2,  // 5.554.700 / 13.471.360 (havo, vwo, mbo2-4)
+  opleidingHoog: 32.5,    // 4.378.820 / 13.471.360 (hbo, wo)
+  // Werkgelegenheid (CBS 85618NED, NL00, 2023)
+  arbeidsparticipatie: 71.0,
+  // Uitkeringen per 1000 inwoners (CBS 85984NED, NL00, berekend: count/bevolking*1000)
+  bijstandPer1000: 23,    // 405.560 / 17.942.942 * 1000 = 22.6 → afgerond 23
+  wwPer1000: 9,           // 158.400 / 17.942.942 * 1000 = 8.8 → afgerond 9
+  aoPer1000: 44,          // 785.330 / 17.942.942 * 1000 = 43.8 → afgerond 44
 };
 
 // Kleuren

@@ -95,12 +95,23 @@ function getDefaultScore(naam: string, gewicht: number): DimensieScore {
 // Dimensie berekeningen
 // Veiligheid: Gebruik dezelfde gewogen score methode als Veiligheid.tsx
 // High-impact delicten wegen 2.5x zwaarder, benchmark: Nederland ~46 misdrijven/1000
+//
+// Methodologie veiligheidsscore:
+// - High-impact delicten (geweld + woninginbraak) wegen 2.5x zwaarder omdat deze de
+//   meeste impact hebben op het veiligheidsgevoel van bewoners (vergelijkbaar met de
+//   Amsterdamse Veiligheidsindex die ook high-impact delicten extra weegt).
+// - Deler 12: bij 120 gewogen misdrijven per 1000 inwoners is de score 0.
+//   Dit is gekozen omdat het NL gemiddelde ~46 ongewogen misdrijven/1000 is;
+//   na weging komt dit op ~60 gewogen/1000, wat score 5.0 geeft (gemiddeld).
+// - Formule: score = max(0, min(10, 10 - (gewogenPer1000 / 12)))
+// - Zelfde formule wordt gebruikt in: Veiligheid.tsx en cbs.ts (fetchVeiligheidsVergelijking)
 function berekenVeiligheidScore(data: GebiedData): DimensieScore {
   const bevolking = data.bevolking.totaal;
   if (bevolking === 0) return getDefaultScore('Veiligheid & Overlast', 0.35);
 
-  // Gewogen score: high-impact delicten wegen 2.5x zwaarder
+  // High-impact: geweld + woninginbraak (2.5x zwaarder vanwege grotere impact op veiligheidsgevoel)
   const highImpact = data.criminaliteit.geweld + data.criminaliteit.inbraakWoningen;
+  // Veelvoorkomend: overig vermogen + vernieling (1x weging)
   const veelvoorkomend = data.criminaliteit.vermogen - data.criminaliteit.inbraakWoningen + data.criminaliteit.vernieling;
 
   const gewogenTotaal = (highImpact * 2.5) + veelvoorkomend;
@@ -108,11 +119,11 @@ function berekenVeiligheidScore(data: GebiedData): DimensieScore {
   const misdrijvenPer1000 = (data.criminaliteit.totaal / bevolking) * 1000;
 
   // Score berekening (0-10 schaal, dan * 10 voor 0-100):
-  // 10 = 0 gewogen misdrijven per 1000
+  // 10.0 = 0 gewogen misdrijven per 1000
   // 7.5 = ~30 gewogen (veilig, onder gemiddeld)
-  // 5.0 = ~60 gewogen (gemiddeld)
+  // 5.0 = ~60 gewogen (gemiddeld, ~NL niveau)
   // 2.5 = ~90 gewogen (onveilig)
-  // 0 = 120+ gewogen (zeer onveilig)
+  // 0.0 = 120+ gewogen (zeer onveilig)
   const score10 = Math.max(0, Math.min(10, 10 - (gewogenPer1000 / 12)));
   const score = score10 * 10; // naar 0-100 schaal
 

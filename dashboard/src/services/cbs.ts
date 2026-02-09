@@ -1,10 +1,10 @@
 import type { Gebied, GebiedData, CriminaliteitTrend, VeiligheidsScoreVergelijking, BevolkingsDynamiek, HerkomstLandData } from '../types/gebied';
-import type { UitkeringenData, OpleidingsniveauData, WerkgelegenheidData } from '../types/werkInkomen';
+import type { OpleidingsniveauData, WerkgelegenheidData } from '../types/werkInkomen';
 
 const CBS_BASE_URL = 'https://datasets.cbs.nl/odata/v1/CBS';
 const CBS_CRIME_URL = 'https://dataderden.cbs.nl/ODataApi/OData/47018NED';
 const CBS_PC4_URL = 'https://opendata.cbs.nl/ODataApi/odata/85640NED';  // Herkomstland per PC4
-const CBS_UITKERINGEN_URL = 'https://opendata.cbs.nl/ODataApi/OData/86003NED';  // Uitkeringen per wijk/buurt 2024
+// Uitkeringen komen uit kerncijfers 85984NED (codes D006842, D001827, D006837, D000193)
 const CBS_OPLEIDING_URL = 'https://opendata.cbs.nl/ODataApi/odata/86052NED';  // Opleidingsniveau per wijk/buurt 2023
 const CBS_KERNCIJFERS_2023_URL = 'https://datasets.cbs.nl/odata/v1/CBS/85618NED';  // Kerncijfers 2023 (heeft werkgelegenheidsdata)
 
@@ -552,7 +552,10 @@ export async function fetchCriminaliteitTrend(code: string): Promise<Criminalite
 }
 
 // Bereken veiligheidsscore op basis van gewogen criminaliteit
-// High-impact delicten (geweld, woninginbraak) wegen 2.5x zwaarder
+// High-impact delicten (geweld + woninginbraak) wegen 2.5x zwaarder vanwege grotere
+// impact op veiligheidsgevoel. Deler 12: bij 120 gewogen misdrijven/1000 = score 0.
+// NL gemiddelde ~46 ongewogen/1000 komt na weging op ~60 gewogen/1000 = score 5.0.
+// Zelfde formule in: leefbaarheid.ts (berekenVeiligheidScore) en Veiligheid.tsx
 function calculateVeiligheidsScore(
   geweld: number,
   inbraakWoningen: number,
@@ -1133,67 +1136,3 @@ export async function fetchWerkgelegenheidData(code: string): Promise<Werkgelege
   }
 }
 
-// Haal uitkeringendata op voor een gebied (CBS 86003NED)
-export async function fetchUitkeringenData(code: string, bevolking: number): Promise<UitkeringenData> {
-  const emptyResult: UitkeringenData = {
-    bijstand: null,
-    ww: null,
-    ao: null,
-    aow: null,
-    bijstandPer1000: null,
-    wwPer1000: null,
-    aoPer1000: null,
-  };
-
-  try {
-    // Format code voor CBS API (moet 8 karakters zijn met trailing spaties)
-    const paddedCode = code.padEnd(8, ' ');
-
-    // Uitkeringstypes die we willen ophalen
-    // SoortUitkering codes uit 86003NED:
-    // T001111 = Totaal, A048386 = Bijstand, A048387 = WW, A048388 = AO, A048389 = AOW
-    const uitkeringTypes = [
-      { code: 'A048386', field: 'bijstand' },  // Bijstand (Participatiewet)
-      { code: 'A048387', field: 'ww' },        // WW (Werkloosheidsuitkering)
-      { code: 'A048388', field: 'ao' },        // AO (Arbeidsongeschiktheid)
-      { code: 'A048389', field: 'aow' },       // AOW (Ouderdomspensioen)
-    ];
-
-    const results: Record<string, number | null> = {};
-
-    // Haal data op voor elke uitkeringstype
-    for (const type of uitkeringTypes) {
-      try {
-        const url = `${CBS_UITKERINGEN_URL}/TypedDataSet?$filter=WijkenEnBuurten eq '${paddedCode}' and SoortUitkering eq '${type.code}'&$select=PersonenMetEenUitkering_1`;
-        const response = await fetch(url);
-
-        if (response.ok) {
-          const data = await response.json();
-          const value = data.value?.[0]?.PersonenMetEenUitkering_1;
-          results[type.field] = value !== undefined && value !== null ? Number(value) : null;
-        }
-      } catch {
-        results[type.field] = null;
-      }
-    }
-
-    // Bereken per 1000 inwoners
-    const calcPer1000 = (value: number | null): number | null => {
-      if (value === null || bevolking === 0) return null;
-      return Math.round((value / bevolking) * 1000 * 10) / 10;
-    };
-
-    return {
-      bijstand: results.bijstand ?? null,
-      ww: results.ww ?? null,
-      ao: results.ao ?? null,
-      aow: results.aow ?? null,
-      bijstandPer1000: calcPer1000(results.bijstand ?? null),
-      wwPer1000: calcPer1000(results.ww ?? null),
-      aoPer1000: calcPer1000(results.ao ?? null),
-    };
-  } catch (e) {
-    console.warn('Kon uitkeringen data niet ophalen:', e);
-    return emptyResult;
-  }
-}
