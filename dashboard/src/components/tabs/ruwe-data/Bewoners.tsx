@@ -2,6 +2,9 @@ import { useState } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
 import { InfoGrid } from '../../ui/InfoGrid';
+import { TabScoreHeader } from '../../ui/TabScoreHeader';
+import { berekenBewonersScore } from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
 import {
   BarChart,
   Bar,
@@ -36,7 +39,7 @@ function getHerkomstLandKleur(land: string): string {
 }
 
 export function Bewoners() {
-  const { gebiedData, selectedGebied, isLoadingData } = useGebiedStore();
+  const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
   const [showDichtheidInfo, setShowDichtheidInfo] = useState(false);
 
   if (!selectedGebied) {
@@ -87,8 +90,15 @@ export function Bewoners() {
     : bevolking.dichtheid > 1000 ? 'Matig dicht'
     : 'Dunbevolkt';
 
+  // Score berekening
+  const benchmarks = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
+    : NL_BENCHMARKS;
+  const tabScore = berekenBewonersScore(gebiedData, benchmarks);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <TabScoreHeader tabScore={tabScore} />
       {/* Demografische gegevens */}
       <Card title="Demografische Gegevens" badge="data" year={kerncijfersJaar}>
         <InfoGrid

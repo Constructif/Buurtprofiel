@@ -35,6 +35,14 @@ interface GebiedStore {
   gebiedData: GebiedData | null;
   setGebiedData: (data: GebiedData | null) => void;
 
+  // Gemeente data (voor benchmark vergelijking)
+  gemeenteData: GebiedData | null;
+  setGemeenteData: (data: GebiedData | null) => void;
+
+  // Benchmark toggle
+  benchmarkType: 'nederland' | 'gemeente';
+  setBenchmarkType: (type: 'nederland' | 'gemeente') => void;
+
   // Voorzieningen cache per gebied
   voorzieningenCache: Map<string, VoorzieningenCache>;
   setVoorzieningenCache: (gebiedCode: string, data: VoorzieningenCache) => void;
@@ -66,10 +74,16 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
 
   selectedGebied: null,
   setSelectedGebied: (gebied) => set({ selectedGebied: gebied }),
-  clearSelectedGebied: () => set({ selectedGebied: null, gebiedData: null }),
+  clearSelectedGebied: () => set({ selectedGebied: null, gebiedData: null, gemeenteData: null }),
 
   gebiedData: null,
   setGebiedData: (data) => set({ gebiedData: data }),
+
+  gemeenteData: null,
+  setGemeenteData: (data) => set({ gemeenteData: data }),
+
+  benchmarkType: 'nederland',
+  setBenchmarkType: (type) => set({ benchmarkType: type }),
 
   voorzieningenCache: new Map(),
   setVoorzieningenCache: (gebiedCode, data) => {

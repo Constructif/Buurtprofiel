@@ -1,18 +1,69 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { Card } from '../../ui/Card';
 import { BuurtMap } from '../../maps/BuurtMap';
 import {
-  berekenLeefbaarheidScore,
-  getClassificatie,
+  berekenBuurtprofielScore,
   getClassificatieKleur,
-  type LeefbaarheidScore,
-  type DimensieScore,
-} from '../../../utils/leefbaarheid';
+} from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { fetchZorgWelzijnData } from '../../../services/rivm';
+import { fetchLeefomgevingData } from '../../../services/leefomgeving';
+import type { ZorgWelzijnData } from '../../../types/zorgWelzijn';
+import type { LeefomgevingData } from '../../../types/leefomgeving';
+import type { BuurtprofielScore, TabScore } from '../../../types/scoring';
 
 export function Overzicht() {
-  const { gebiedData, selectedGebied, isLoadingData, getVoorzieningenCache } = useGebiedStore();
-  const [expandedDimensies, setExpandedDimensies] = useState<Set<string>>(new Set());
+  const {
+    gebiedData, selectedGebied, isLoadingData, getVoorzieningenCache,
+    benchmarkType, setBenchmarkType, gemeenteData,
+  } = useGebiedStore();
+
+  const [zorgData, setZorgData] = useState<ZorgWelzijnData | null>(null);
+  const [leefomgevingData, setLeefomgevingData] = useState<LeefomgevingData | null>(null);
+  const [isLoadingExtra, setIsLoadingExtra] = useState(false);
+
+  // Fetch zorg & leefomgeving data voor scoreberekening
+  useEffect(() => {
+    if (!selectedGebied || !gebiedData) {
+      setZorgData(null);
+      setLeefomgevingData(null);
+      return;
+    }
+
+    const loadExtraData = async () => {
+      setIsLoadingExtra(true);
+      try {
+        const [zorg, leefomgeving] = await Promise.all([
+          fetchZorgWelzijnData(
+            selectedGebied.code,
+            selectedGebied.wijkCode,
+            selectedGebied.gemeenteCode,
+            selectedGebied.naam,
+            selectedGebied.wijkNaam,
+            selectedGebied.gemeenteNaam,
+          ),
+          fetchLeefomgevingData(
+            selectedGebied.code,
+            selectedGebied.type,
+            selectedGebied.naam,
+            gebiedData.bevolking.totaal,
+            selectedGebied.wijkCode,
+            selectedGebied.wijkNaam,
+            selectedGebied.gemeenteCode,
+            selectedGebied.gemeenteNaam,
+          ),
+        ]);
+        setZorgData(zorg);
+        setLeefomgevingData(leefomgeving);
+      } catch (err) {
+        console.error('Fout bij laden extra data:', err);
+      } finally {
+        setIsLoadingExtra(false);
+      }
+    };
+
+    loadExtraData();
+  }, [selectedGebied, gebiedData]);
 
   if (!selectedGebied) {
     return (
@@ -41,78 +92,131 @@ export function Overzicht() {
 
   // Haal voorzieningen uit cache
   const voorzieningenCache = getVoorzieningenCache(selectedGebied.code);
-  const aantalVoorzieningen = voorzieningenCache?.voorzieningen?.length ?? 0;
+  const voorzieningen = voorzieningenCache?.voorzieningen ?? [];
 
-  // Bereken leefbaarheidsscore
-  const leefbaarheid = berekenLeefbaarheidScore(gebiedData, aantalVoorzieningen);
+  // Bepaal benchmarks
+  const isGemeente = selectedGebied.type === 'gemeente';
+  const activeBenchmarkType = isGemeente ? 'nederland' : benchmarkType;
+  const benchmarks = activeBenchmarkType === 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData, gemeenteData, zorgData, leefomgevingData)
+    : NL_BENCHMARKS;
 
-  const toggleDimensie = (naam: string) => {
-    const newSet = new Set(expandedDimensies);
-    if (newSet.has(naam)) {
-      newSet.delete(naam);
-    } else {
-      newSet.add(naam);
-    }
-    setExpandedDimensies(newSet);
-  };
+  // Bereken score
+  const buurtprofiel = berekenBuurtprofielScore(
+    gebiedData, voorzieningen, zorgData, leefomgevingData, benchmarks,
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-      {/* Map + Score + Stats */}
+      {/* Map + Score */}
       <section>
-        <div className="overzicht-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 320px', gap: '16px', alignItems: 'stretch' }}>
+        <div className="overzicht-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '16px', alignItems: 'stretch' }}>
           {/* Kaart */}
           <div className="overzicht-map" style={{ borderRadius: '8px', overflow: 'hidden', height: '100%', minHeight: '400px' }}>
             <BuurtMap />
           </div>
 
-          {/* Leefbaarheid Sectie */}
+          {/* Score Sectie */}
           <div className="overzicht-stats" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* Hoofdscore Card */}
-            <LeefbaarheidScoreCard leefbaarheid={leefbaarheid} />
+            {/* Benchmark Toggle */}
+            {!isGemeente && (
+              <BenchmarkToggle
+                value={benchmarkType}
+                onChange={setBenchmarkType}
+                gemeenteNaam={gemeenteData?.naam || gebiedData.gemeenteNaam}
+              />
+            )}
+
+            {/* Hoofdscore */}
+            <HoofdscoreCard buurtprofiel={buurtprofiel} isLoadingExtra={isLoadingExtra} />
 
             {/* Dimensie Cards */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0' }}>
-              {Object.values(leefbaarheid.dimensies).map((dimensie) => (
-                <DimensieCard
-                  key={dimensie.naam}
-                  dimensie={dimensie}
-                  isExpanded={expandedDimensies.has(dimensie.naam)}
-                  onToggle={() => toggleDimensie(dimensie.naam)}
-                />
+              {Object.values(buurtprofiel.tabs).map((tab) => (
+                <DimensieCard key={tab.naam} tab={tab} />
               ))}
             </div>
 
-            {/* Loading indicator voor voorzieningen */}
-            {!voorzieningenCache && (
+            {/* Loading indicator */}
+            {(isLoadingExtra || !voorzieningenCache) && (
               <div style={{ fontSize: '11px', color: '#9ca3af', textAlign: 'center', padding: '8px' }}>
-                Voorzieningen worden geladen...
+                {isLoadingExtra ? 'Zorg & Leefomgeving data laden...' : 'Voorzieningen worden geladen...'}
               </div>
             )}
           </div>
         </div>
       </section>
-
-      {/* Trends - placeholder sectie */}
-      <section>
-        <Card title="Trends - Laatste 5 jaar" badge="placeholder">
-          <div className="trends-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: '12px' }}>
-            <TrendCard label="Bevolking" value="-" />
-            <TrendCard label="Criminaliteit" value="-" />
-            <TrendCard label="Groen" value="-" />
-            <TrendCard label="Inkomen" value="-" />
-            <TrendCard label="Voorzieningen" value="-" />
-            <TrendCard label="Werkloosheid" value="-" />
-          </div>
-        </Card>
-      </section>
     </div>
   );
 }
 
-// Leefbaarheid Hoofdscore Card
-function LeefbaarheidScoreCard({ leefbaarheid }: { leefbaarheid: LeefbaarheidScore }) {
-  const [showTooltip, setShowTooltip] = useState(false);
+// --- Benchmark Toggle ---
+
+function BenchmarkToggle({
+  value,
+  onChange,
+  gemeenteNaam,
+}: {
+  value: 'nederland' | 'gemeente';
+  onChange: (v: 'nederland' | 'gemeente') => void;
+  gemeenteNaam?: string;
+}) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: '4px',
+      backgroundColor: '#f3f4f6',
+      borderRadius: '6px',
+      padding: '3px',
+      fontSize: '12px',
+    }}>
+      <button
+        onClick={() => onChange('nederland')}
+        style={{
+          flex: 1,
+          padding: '6px 12px',
+          borderRadius: '4px',
+          border: 'none',
+          cursor: 'pointer',
+          fontWeight: value === 'nederland' ? 600 : 400,
+          backgroundColor: value === 'nederland' ? '#fff' : 'transparent',
+          color: value === 'nederland' ? '#1d1d1b' : '#6b7280',
+          boxShadow: value === 'nederland' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+        }}
+      >
+        Nederland
+      </button>
+      <button
+        onClick={() => onChange('gemeente')}
+        style={{
+          flex: 1,
+          padding: '6px 12px',
+          borderRadius: '4px',
+          border: 'none',
+          cursor: 'pointer',
+          fontWeight: value === 'gemeente' ? 600 : 400,
+          backgroundColor: value === 'gemeente' ? '#fff' : 'transparent',
+          color: value === 'gemeente' ? '#1d1d1b' : '#6b7280',
+          boxShadow: value === 'gemeente' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
+        }}
+      >
+        {gemeenteNaam || 'Gemeente'}
+      </button>
+    </div>
+  );
+}
+
+// --- Hoofdscore Card ---
+
+function HoofdscoreCard({
+  buurtprofiel,
+  isLoadingExtra,
+}: {
+  buurtprofiel: BuurtprofielScore;
+  isLoadingExtra: boolean;
+}) {
+  const kleur = getClassificatieKleur(buurtprofiel.classificatie);
 
   return (
     <div style={{
@@ -121,299 +225,93 @@ function LeefbaarheidScoreCard({ leefbaarheid }: { leefbaarheid: LeefbaarheidSco
       padding: '20px',
       textAlign: 'center',
       boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-      position: 'relative'
     }}>
-      {/* Info icoon rechtsboven */}
-      <div
-        style={{ position: 'absolute', top: '12px', right: '12px' }}
-        onMouseEnter={() => setShowTooltip(true)}
-        onMouseLeave={() => setShowTooltip(false)}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ cursor: 'help' }}>
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 16v-4M12 8h.01" />
-        </svg>
-        {showTooltip && (
-          <div style={{
-            position: 'absolute',
-            right: 0,
-            top: '100%',
-            marginTop: '8px',
-            padding: '12px',
-            backgroundColor: '#1d1d1b',
-            color: 'white',
-            borderRadius: '4px',
-            fontSize: '12px',
-            width: '260px',
-            zIndex: 9999,
-            textAlign: 'left'
-          }}>
-            <strong>Leefbaarometer 3.0</strong>
-            <br /><br />
-            De leefbaarheidsscore is gebaseerd op de officiële Leefbaarometer methodiek met 5 dimensies en Z-score normalisatie.
-            <br /><br />
-            <a href="https://www.leefbaarometer.nl" target="_blank" rel="noopener noreferrer" style={{ color: '#eb6608' }}>
-              Meer informatie
-            </a>
-          </div>
-        )}
-      </div>
-
       <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-        LEEFBAARHEID
+        BUURTPROFIEL
       </p>
 
-      <div style={{
-        fontSize: '56px',
-        fontWeight: 700,
-        color: getClassificatieKleur(leefbaarheid.classificatie),
-        lineHeight: 1
-      }}>
-        {leefbaarheid.totaalScore}
+      <div style={{ fontSize: '56px', fontWeight: 700, color: kleur, lineHeight: 1 }}>
+        {buurtprofiel.totaalCijfer.toFixed(1)}
       </div>
 
-      <p style={{ fontSize: '12px', color: '#9ca3af', marginTop: '4px' }}>
-        van 100
+      <p style={{ fontSize: '13px', fontWeight: 600, color: kleur, marginTop: '8px' }}>
+        {buurtprofiel.classificatie}
       </p>
 
-      <p style={{
-        marginTop: '8px',
-        fontSize: '13px',
-        fontWeight: 600,
-        color: getClassificatieKleur(leefbaarheid.classificatie)
+      <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>
+        t.o.v. {buurtprofiel.benchmarkNaam}
+      </p>
+
+      {/* Datakwaliteit */}
+      <div style={{
+        marginTop: '12px',
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '4px 10px',
+        backgroundColor: buurtprofiel.datakwaliteit === 'volledig' ? '#f0fdf4'
+          : buurtprofiel.datakwaliteit === 'gedeeltelijk' ? '#fffbeb'
+          : '#fef2f2',
+        borderRadius: '12px',
+        fontSize: '11px',
+        color: buurtprofiel.datakwaliteit === 'volledig' ? '#16a34a'
+          : buurtprofiel.datakwaliteit === 'gedeeltelijk' ? '#ca8a04'
+          : '#dc2626',
       }}>
-        {leefbaarheid.classificatie}
-      </p>
-
-      <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '12px' }}>
-        Gebaseerd op Leefbaarometer 3.0
-      </p>
+        <span>{buurtprofiel.aantalGemetenTabs} van 7 tabs</span>
+        {isLoadingExtra && <span style={{ fontStyle: 'italic' }}>(laden...)</span>}
+      </div>
     </div>
   );
 }
 
-// Dimensie Card (inklapbaar)
-function DimensieCard({
-  dimensie,
-  isExpanded,
-  onToggle
-}: {
-  dimensie: DimensieScore;
-  isExpanded: boolean;
-  onToggle: () => void;
-}) {
-  const [showInfoTooltip, setShowInfoTooltip] = useState(false);
+// --- Dimensie Card ---
 
-  const dimensieBeschrijvingen: Record<string, string> = {
-    'Veiligheid & Overlast': 'Gebaseerd op criminaliteitscijfers per 1.000 inwoners: totaal misdrijven, geweld, vermogen, vernieling en overlast.',
-    'Voorzieningen': 'Aantal basisvoorzieningen (scholen, winkels, huisartsen, etc.) per 1.000 inwoners binnen het gebied.',
-    'Woningvoorraad': 'Combinatie van eigendomsverdeling (koop vs. huur) en woningtypen (vrijstaand, 2-onder-1-kap, etc.).',
-    'Sociale Cohesie': 'Gebaseerd op huishoudenssamenstelling: eenpersoonshuishoudens, gezinnen met kinderen en gemiddelde grootte.',
-    'Fysieke Omgeving': 'Groenvoorzieningen, luchtkwaliteit en geluidsoverlast. Momenteel nog niet gemeten.',
-  };
+function DimensieCard({ tab }: { tab: TabScore }) {
+  const kleur = tab.isGemeten ? getClassificatieKleur(tab.classificatie) : '#9ca3af';
 
   return (
     <div style={{
       backgroundColor: 'white',
       border: '1px solid #e5e7eb',
       borderBottom: 'none',
-      overflow: 'hidden'
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      padding: '10px 16px',
+      opacity: tab.isGemeten ? 1 : 0.6,
     }}>
-      {/* Header - altijd zichtbaar */}
-      <div
-        onClick={dimensie.isGemeten ? onToggle : undefined}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '12px 16px',
-          cursor: dimensie.isGemeten ? 'pointer' : 'default',
-          backgroundColor: !dimensie.isGemeten ? '#f9fafb' : 'white',
-          opacity: !dimensie.isGemeten ? 0.7 : 1
-        }}
-      >
-        <div>
-          <div style={{ fontWeight: 600, fontSize: '14px', color: '#1d1d1b' }}>
-            {dimensie.naam}
-          </div>
-          <div style={{ fontSize: '11px', color: '#6b7280' }}>
-            {Math.round(dimensie.gewicht * 100)}% gewicht
-          </div>
+      {/* Links: naam + gewicht */}
+      <div>
+        <div style={{ fontWeight: 600, fontSize: '13px', color: '#1d1d1b' }}>
+          {tab.naam}
         </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {dimensie.isGemeten ? (
-            <>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{
-                  fontSize: '20px',
-                  fontWeight: 700,
-                  color: getClassificatieKleur(dimensie.classificatie)
-                }}>
-                  {dimensie.score}
-                </div>
-                <div style={{
-                  fontSize: '10px',
-                  color: getClassificatieKleur(dimensie.classificatie),
-                  fontWeight: 500
-                }}>
-                  {dimensie.classificatie}
-                </div>
-              </div>
-
-              {/* Info icoon */}
-              <div
-                style={{ position: 'relative' }}
-                onMouseEnter={() => setShowInfoTooltip(true)}
-                onMouseLeave={() => setShowInfoTooltip(false)}
-                onClick={(e) => e.stopPropagation()}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ cursor: 'help' }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4M12 8h.01" />
-                </svg>
-                {showInfoTooltip && (
-                  <div style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: '100%',
-                    marginTop: '8px',
-                    padding: '10px',
-                    backgroundColor: '#1d1d1b',
-                    color: 'white',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    width: '240px',
-                    zIndex: 9999
-                  }}>
-                    {dimensieBeschrijvingen[dimensie.naam] || ''}
-                  </div>
-                )}
-              </div>
-
-              {/* Chevron */}
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#9ca3af"
-                strokeWidth="2"
-                style={{
-                  transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
-                  transition: 'transform 0.2s'
-                }}
-              >
-                <polyline points="6,9 12,15 18,9" />
-              </svg>
-            </>
-          ) : (
-            <>
-              <span style={{ fontSize: '12px', color: '#9ca3af', fontStyle: 'italic' }}>
-                NOG NIET GEMETEN
-              </span>
-              {/* Info icoon voor niet-gemeten dimensie */}
-              <div
-                style={{ position: 'relative' }}
-                onMouseEnter={() => setShowInfoTooltip(true)}
-                onMouseLeave={() => setShowInfoTooltip(false)}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ cursor: 'help' }}>
-                  <circle cx="12" cy="12" r="10" />
-                  <path d="M12 16v-4M12 8h.01" />
-                </svg>
-                {showInfoTooltip && (
-                  <div style={{
-                    position: 'absolute',
-                    right: 0,
-                    top: '100%',
-                    marginTop: '8px',
-                    padding: '10px',
-                    backgroundColor: '#1d1d1b',
-                    color: 'white',
-                    borderRadius: '4px',
-                    fontSize: '11px',
-                    width: '240px',
-                    zIndex: 9999
-                  }}>
-                    {dimensieBeschrijvingen[dimensie.naam] || ''}
-                  </div>
-                )}
-              </div>
-            </>
+        <div style={{ fontSize: '11px', color: '#6b7280' }}>
+          {Math.round(tab.gewicht * 100)}% gewicht
+          {tab.isGemeenteData && <span style={{ fontStyle: 'italic', marginLeft: '4px' }}>(gem.)</span>}
+          {tab.confidence !== 'high' && tab.isGemeten && (
+            <span style={{ fontStyle: 'italic', marginLeft: '4px' }}>
+              ({tab.confidence === 'medium' ? 'beperkt' : 'weinig data'})
+            </span>
           )}
         </div>
       </div>
 
-      {/* Uitklapbare details */}
-      {isExpanded && dimensie.isGemeten && dimensie.indicatoren.length > 0 && (
-        <div style={{
-          padding: '12px 16px',
-          borderTop: '1px solid #e5e7eb',
-          backgroundColor: '#fafafa'
-        }}>
-          <p style={{ fontSize: '11px', color: '#6b7280', marginBottom: '8px', fontWeight: 500 }}>
-            Gebruikte gegevens:
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {dimensie.indicatoren.map((indicator, i) => (
-              <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                <span style={{ color: '#374151' }}>{indicator.naam}</span>
-                <span style={{ fontWeight: 500, color: '#111827' }}>
-                  {indicator.waarde}{indicator.eenheid ? ` ${indicator.eenheid}` : ''}
-                </span>
-              </div>
-            ))}
+      {/* Rechts: score */}
+      {tab.isGemeten ? (
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '20px', fontWeight: 700, color: kleur }}>
+            {tab.score.toFixed(1)}
           </div>
-
-          {/* Berekende waarden sectie */}
-          {dimensie.indicatoren.some(i => i.gemiddelde > 0) && (
-            <>
-              <p style={{ fontSize: '11px', color: '#6b7280', marginTop: '12px', marginBottom: '8px', fontWeight: 500 }}>
-                Berekende waarden:
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                {dimensie.indicatoren.filter(i => i.gemiddelde > 0).map((indicator, i) => (
-                  <div key={i}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
-                      <span style={{ color: '#374151' }}>{indicator.naam}</span>
-                      <span style={{ fontWeight: 500, color: getClassificatieKleur(getClassificatie(normalizeIndicatorScore(indicator.zScore))) }}>
-                        {indicator.waarde}{indicator.eenheid ? ` ${indicator.eenheid}` : ''}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: '#6b7280' }}>
-                      <span>Nederlands gemiddelde</span>
-                      <span>{indicator.gemiddelde}{indicator.eenheid ? ` ${indicator.eenheid}` : ''}</span>
-                    </div>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
-                      <span style={{ color: '#6b7280' }}>Z-score</span>
-                      <span style={{ color: indicator.zScore > 0 ? '#10b981' : indicator.zScore < 0 ? '#ef4444' : '#6b7280' }}>
-                        {indicator.zScore > 0 ? '+' : ''}{indicator.zScore.toFixed(2)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
+          <div style={{ fontSize: '10px', color: kleur, fontWeight: 500 }}>
+            {tab.classificatie}
+          </div>
         </div>
+      ) : (
+        <span style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic' }}>
+          GEEN DATA
+        </span>
       )}
-    </div>
-  );
-}
-
-// Hulpfunctie om Z-score naar 0-100 schaal te converteren (voor kleur bepaling)
-function normalizeIndicatorScore(zScore: number): number {
-  const normalized = ((zScore + 2) / 4) * 100;
-  return Math.max(0, Math.min(100, normalized));
-}
-
-// Trend Card
-function TrendCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '12px', backgroundColor: '#f5f1ee' }}>
-      <p style={{ fontSize: '13px', color: '#4b5563', marginBottom: '8px' }}>{label}</p>
-      <p style={{ fontWeight: 600, fontSize: '18px', color: '#9ca3af' }}>{value}</p>
     </div>
   );
 }

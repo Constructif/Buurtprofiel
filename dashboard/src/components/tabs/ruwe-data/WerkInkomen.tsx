@@ -1,6 +1,9 @@
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
 import type { UitkeringenData } from '../../../types/werkInkomen';
+import { TabScoreHeader } from '../../ui/TabScoreHeader';
+import { berekenWerkInkomenScore } from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
 import {
   BarChart,
   Bar,
@@ -74,7 +77,7 @@ function calcPer1000(value: number | null, bevolking: number): number | null {
 }
 
 export function WerkInkomen() {
-  const { selectedGebied, isLoadingData, gebiedData } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
 
   // No selection state
   if (!selectedGebied) {
@@ -122,8 +125,15 @@ export function WerkInkomen() {
     { label: 'Hoog opgeleid', value: werkInkomen?.opleiding.hoog ?? null, nlWaarde: NL_REFERENTIES.opleidingHoog, key: 'opleidingHoog', unit: '%' },
   ];
 
+  // Tab score berekening
+  const benchmarksWI = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
+    : NL_BENCHMARKS;
+  const tabScore = berekenWerkInkomenScore(gebiedData, benchmarksWI);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <TabScoreHeader tabScore={tabScore} />
       {/* Aandachtspunten */}
       <AandachtspuntenCard punten={aandachtspunten} />
 

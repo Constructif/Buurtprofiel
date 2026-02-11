@@ -1,6 +1,9 @@
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
 import { InfoGrid } from '../../ui/InfoGrid';
+import { TabScoreHeader } from '../../ui/TabScoreHeader';
+import { berekenWonenScore } from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
 import {
   PieChart,
   Pie,
@@ -22,7 +25,7 @@ function formatNumber(num: number): string {
 const COLORS = ['#eb6608', '#1d1d1b', '#3498db', '#2ecc71'];
 
 export function Wonen() {
-  const { gebiedData, selectedGebied, isLoadingData } = useGebiedStore();
+  const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
 
   if (!selectedGebied) {
     return (
@@ -78,8 +81,15 @@ export function Wonen() {
     ? bevolkingsDynamiek.jaren[bevolkingsDynamiek.jaren.length - 1]?.jaar
     : undefined;
 
+  // Score berekening
+  const benchmarks = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
+    : NL_BENCHMARKS;
+  const tabScore = berekenWonenScore(gebiedData, benchmarks);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+      <TabScoreHeader tabScore={tabScore} />
       {/* Woningvoorraad */}
       <Card title="Woningvoorraad" badge="data" year={kerncijfersJaar}>
         <InfoGrid

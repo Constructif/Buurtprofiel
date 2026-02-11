@@ -3,6 +3,9 @@ import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
 import { fetchZorgWelzijnData } from '../../../services/rivm';
 import type { ZorgWelzijnData } from '../../../types/zorgWelzijn';
+import { TabScoreHeader } from '../../ui/TabScoreHeader';
+import { berekenZorgWelzijnScore } from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
 import {
   LineChart,
   Line,
@@ -86,7 +89,7 @@ const getEenzaamheidColor = (percentage: number | null): string => {
 };
 
 export function ZorgWelzijn() {
-  const { selectedGebied, isLoadingData, gebiedData } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
   const [zorgData, setZorgData] = useState<ZorgWelzijnData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -180,8 +183,15 @@ export function ZorgWelzijn() {
     { label: 'Moeite rondkomen', value: zorgOndersteuning.moeiteRondkomen, nlWaarde: NL_REFERENTIES.moeiteRondkomen, key: 'moeiteRondkomen' },
   ];
 
+  // Tab score berekening
+  const benchmarksZW = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData!, gemeenteData, zorgData, null)
+    : NL_BENCHMARKS;
+  const tabScore = berekenZorgWelzijnScore(zorgData, gebiedData?.jeugdzorgWmo, benchmarksZW);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <TabScoreHeader tabScore={tabScore} />
       {/* SECTIE 0: Aandachtspunten */}
       <AandachtspuntenCard punten={aandachtspunten} />
 

@@ -1,6 +1,9 @@
 import { useState } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
+import { TabScoreHeader } from '../../ui/TabScoreHeader';
+import { berekenVeiligheidScore } from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
 import {
   PieChart,
   Pie,
@@ -16,7 +19,7 @@ import {
 } from 'recharts';
 
 export function Veiligheid() {
-  const { gebiedData, selectedGebied, isLoadingData } = useGebiedStore();
+  const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
 
   if (!selectedGebied) {
     return (
@@ -98,8 +101,15 @@ export function Veiligheid() {
     { name: 'Overig', value: overig + criminaliteit.brandOntploffing + criminaliteit.aantastingOpenbareOrde + criminaliteit.cybercrime, color: '#95a5a6' },
   ].filter(item => item.value > 0);
 
+  // Tab score berekening
+  const benchmarks = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
+    : NL_BENCHMARKS;
+  const tabScore = berekenVeiligheidScore(gebiedData, benchmarks);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <TabScoreHeader tabScore={tabScore} />
       {/* Veiligheidsscore - compacter */}
       <Card title="Veiligheidsscore" badge="data" year={dataJaar}>
         <div style={{ padding: '16px 20px' }}>

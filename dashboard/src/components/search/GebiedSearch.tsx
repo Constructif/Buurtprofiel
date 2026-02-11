@@ -15,6 +15,7 @@ export function GebiedSearch() {
     setAllGebieden,
     setSelectedGebied,
     setGebiedData,
+    setGemeenteData,
     isLoadingGebieden,
     setIsLoadingGebieden,
     setIsLoadingData,
@@ -83,18 +84,24 @@ export function GebiedSearch() {
         ? gebied.code
         : gebied.gemeenteCode;
 
-      // Laad ALLE data parallel, inclusief voorzieningen
-      // Dit zorgt ervoor dat alle tabs data hebben voordat loading klaar is
-      const [data, trendData, bevolkingsDynamiek, herkomstLandGemeente] = await Promise.all([
+      // Laad ALLE data parallel, inclusief voorzieningen en gemeente-data voor benchmark
+      const gemeenteGebied: Gebied = {
+        code: gemeenteCode || gebied.code,
+        naam: gebied.gemeenteNaam || gebied.naam,
+        type: 'gemeente',
+      };
+      const [data, trendData, bevolkingsDynamiek, herkomstLandGemeente, gemeenteResult] = await Promise.all([
         fetchCBSData(gebied.code, gebied.naam, gebied),
         fetchCriminaliteitTrend(gebied.code),
         gemeenteCode ? fetchVerhuisbewegingen(gemeenteCode) : Promise.resolve({ jaren: [] }),
         gemeenteCode ? fetchHerkomstLandData(gemeenteCode) : Promise.resolve({ totaal: 0, landen: [] }),
-        // Start voorzieningen prefetch parallel - dit wacht niet op resultaat
-        // maar de promise wordt opgeslagen zodat de Voorzieningen component
-        // kan wachten op dezelfde promise (geen dubbele API calls)
-        prefetchVoorzieningen(gebied.code),
+        // Gemeente-level data ophalen voor benchmark vergelijking
+        (gebied.type !== 'gemeente' && gemeenteCode)
+          ? fetchCBSData(gemeenteCode, gebied.gemeenteNaam || '', gemeenteGebied)
+          : Promise.resolve(null),
       ]);
+      // Start voorzieningen prefetch parallel (fire-and-forget)
+      prefetchVoorzieningen(gebied.code);
 
       // Haal veiligheidsvergelijking op met gewogen parameters
       const veiligheidsVergelijking = await fetchVeiligheidsVergelijking(
@@ -116,6 +123,9 @@ export function GebiedSearch() {
         herkomstLandGemeente: herkomstLandGemeente.landen.length > 0 ? herkomstLandGemeente : undefined,
         gemeenteNaam: gebied.gemeenteNaam || gebied.naam,
       });
+
+      // Sla gemeente-data op voor benchmark vergelijking
+      setGemeenteData(gemeenteResult);
     } catch (error) {
       console.error('Fout bij laden data:', error);
     } finally {

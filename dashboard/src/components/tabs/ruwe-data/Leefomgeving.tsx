@@ -4,6 +4,9 @@ import { Card } from '../../ui/Card';
 import { fetchLeefomgevingData } from '../../../services/leefomgeving';
 import type { LeefomgevingData, LeefomgevingVergelijkingNiveau } from '../../../types/leefomgeving';
 import { NL_LEEFOMGEVING_REFERENTIES } from '../../../types/leefomgeving';
+import { TabScoreHeader } from '../../ui/TabScoreHeader';
+import { berekenLeefomgevingScore } from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
 import {
   BarChart,
   Bar,
@@ -33,7 +36,7 @@ function getKpiColor(value: number | null, nlWaarde: number): string {
 const PIE_COLORS = ['#22c55e', '#84cc16', '#34d399', '#10b981', '#059669'];
 
 export function Leefomgeving() {
-  const { selectedGebied, isLoadingData, gebiedData } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
   const [leefomgevingData, setLeefomgevingData] = useState<LeefomgevingData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,8 +145,15 @@ export function Leefomgeving() {
     { name: 'Natuurlijk terrein', value: bodemgebruik.natuurlijkTerrein || 0 },
   ].filter(item => item.value > 0);
 
+  // Tab score berekening
+  const benchmarksLO = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData!, gemeenteData, null, leefomgevingData)
+    : NL_BENCHMARKS;
+  const tabScore = berekenLeefomgevingScore(leefomgevingData, benchmarksLO);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+      <TabScoreHeader tabScore={tabScore} />
       {/* SECTIE 0: Aandachtspunten */}
       <AandachtspuntenCard punten={aandachtspunten} />
 

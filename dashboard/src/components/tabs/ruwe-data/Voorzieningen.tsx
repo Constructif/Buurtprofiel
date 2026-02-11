@@ -12,6 +12,9 @@ import {
   type VoorzieningType,
 } from '../../../services/overpass';
 import { Card } from '../../ui/Card';
+import { TabScoreHeader } from '../../ui/TabScoreHeader';
+import { berekenVoorzieningenScore } from '../../../utils/scoring';
+import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
 
 // Fix voor Leaflet default marker icons in Vite
 // @ts-expect-error - Leaflet internal property needs to be reset for Vite compatibility
@@ -158,7 +161,7 @@ function MapController({ geometry, voorzieningen, selectedVoorzieningId }: MapCo
 }
 
 export function Voorzieningen() {
-  const { selectedGebied, getVoorzieningenCache, waitForVoorzieningen } = useGebiedStore();
+  const { selectedGebied, getVoorzieningenCache, waitForVoorzieningen, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
 
   // State voor voorzieningen data
   const [geometry, setGeometry] = useState<GeoJSON.Feature | null>(null);
@@ -352,13 +355,24 @@ export function Voorzieningen() {
     );
   }
 
+  // Tab score berekening
+  const bevolking = gebiedData?.bevolking.totaal ?? 0;
+  const benchmarksVoorz = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
+    ? getGemeenteBenchmarks(gebiedData!, gemeenteData, null, null)
+    : NL_BENCHMARKS;
+  const tabScore = bevolking > 0
+    ? berekenVoorzieningenScore(bevolking, voorzieningen, benchmarksVoorz)
+    : null;
+
   return (
-    <div className="voorzieningen-layout" style={{
-      display: 'grid',
-      gridTemplateColumns: isMobile ? '1fr' : '240px 1fr 320px',
-      gap: isMobile ? '12px' : '20px',
-      alignItems: 'start'
-    }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      {tabScore && <TabScoreHeader tabScore={tabScore} />}
+      <div className="voorzieningen-layout" style={{
+        display: 'grid',
+        gridTemplateColumns: isMobile ? '1fr' : '240px 1fr 320px',
+        gap: isMobile ? '12px' : '20px',
+        alignItems: 'start'
+      }}>
       {/* Filter Sidebar - Links */}
       <div className="voorzieningen-sidebar voorzieningen-filters" style={{
         position: isMobile ? 'static' : 'sticky',
@@ -661,6 +675,7 @@ export function Voorzieningen() {
           </Card>
         )}
       </div>
+    </div>
     </div>
   );
 }
