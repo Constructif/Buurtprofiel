@@ -4,19 +4,73 @@ import type {
   GroenpercentageData,
   GroenMetrics,
   LeefomgevingVergelijking,
-  LeefomgevingVergelijkingNiveau,
 } from '../types/leefomgeving';
 import { NL_LEEFOMGEVING_REFERENTIES } from '../types/leefomgeving';
+import { supabase } from './supabase';
 
-// Nieuwe CBS OData v1 API - ondersteunt filters correct (oude API negeerde filters)
-const CBS_BODEMGEBRUIK_URL = 'https://datasets.cbs.nl/odata/v1/CBS/86211NED';
-const RIVM_WFS_BASE = 'https://data.rivm.nl/geo/ank/wfs';
+/**
+ * Haal bodemgebruik data op uit Supabase (gemeente-niveau)
+ */
+export async function fetchBodemgebruik(code: string, gemeenteCode?: string, jaar?: number): Promise<BodemgebruikData> {
+  try {
+    let codeToUse = code;
+    if (code.startsWith('BU') || code.startsWith('WK')) {
+      if (gemeenteCode) {
+        codeToUse = gemeenteCode;
+      } else {
+        codeToUse = 'GM' + code.substring(2, 6);
+      }
+    }
 
-// Cache voor RIVM groenpercentage data (WFS calls zijn traag)
-const groenpercentageCache = new Map<string, { data: GroenpercentageData; timestamp: number }>();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minuten
+    let query = supabase
+      .from('bodemgebruik')
+      .select('totaal_oppervlakte, stedelijk_groen, sportterrein, recreatief_terrein, natuurlijk_terrein, jaar')
+      .eq('gemeente_code', codeToUse);
 
-// Helper: maak lege bodemgebruik data
+    if (jaar) {
+      query = query.eq('jaar', jaar);
+    } else {
+      query = query.order('jaar', { ascending: false }).limit(1);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    // Als exact jaar niet gevonden, fallback naar meest recente
+    if (jaar && !data) {
+      const { data: fallback } = await supabase
+        .from('bodemgebruik')
+        .select('totaal_oppervlakte, stedelijk_groen, sportterrein, recreatief_terrein, natuurlijk_terrein, jaar')
+        .eq('gemeente_code', codeToUse)
+        .order('jaar', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (fallback) {
+        return {
+          totaalOppervlakte: fallback.totaal_oppervlakte ?? null,
+          stedelijkGroen: fallback.stedelijk_groen ?? null,
+          sportterrein: fallback.sportterrein ?? null,
+          recreatiefTerrein: fallback.recreatief_terrein ?? null,
+          natuurlijkTerrein: fallback.natuurlijk_terrein ?? null,
+          dataJaar: fallback.jaar,
+        };
+      }
+    }
+
+    if (error || !data) return createEmptyBodemgebruik();
+
+    return {
+      totaalOppervlakte: data.totaal_oppervlakte ?? null,
+      stedelijkGroen: data.stedelijk_groen ?? null,
+      sportterrein: data.sportterrein ?? null,
+      recreatiefTerrein: data.recreatief_terrein ?? null,
+      natuurlijkTerrein: data.natuurlijk_terrein ?? null,
+      dataJaar: data.jaar,
+    };
+  } catch {
+    return createEmptyBodemgebruik();
+  }
+}
+
 function createEmptyBodemgebruik(): BodemgebruikData {
   return {
     totaalOppervlakte: null,
@@ -28,131 +82,24 @@ function createEmptyBodemgebruik(): BodemgebruikData {
 }
 
 /**
- * Haal bodemgebruik data op van CBS (86211NED) via de nieuwe OData v1 API
- *
- * Measure codes mapping:
- * - T001455: Totaal Land en water (ha)
- * - A052552: Stedelijk groen (ha)
- * - A045816: Sportterrein (ha)
- * - A045814_2: Totaal Recreatief terrein (ha)
- * - A045823_2: Totaal Natuurlijk terrein (ha)
- *
- * BELANGRIJK: Dataset 86211NED heeft voornamelijk gemeente-niveau data.
- * Bij buurt/wijk codes wordt automatisch de gemeente code gebruikt.
- */
-export async function fetchBodemgebruik(code: string, gemeenteCode?: string): Promise<BodemgebruikData> {
-  try {
-    // CBS 86211NED heeft voornamelijk gemeente-niveau data
-    // Converteer buurt/wijk codes naar gemeente code
-    let codeToUse = code;
-    if (code.startsWith('BU') || code.startsWith('WK')) {
-      if (gemeenteCode) {
-        codeToUse = gemeenteCode;
-      } else {
-        // Extract gemeente uit buurt/wijk code: BU03630980 → GM0363
-        codeToUse = 'GM' + code.substring(2, 6);
-      }
-    }
-
-    // Nieuwe CBS OData v1 API met Measure codes
-    const measures = ['T001455', 'A052552', 'A045816', 'A045814_2', 'A045823_2'];
-    const measureFilter = measures.map((m) => `Measure eq '${m}'`).join(' or ');
-
-    const url = `${CBS_BODEMGEBRUIK_URL}/Observations?$filter=AlleRegioIndelingen eq '${codeToUse}' and (${measureFilter})`;
-
-    const response = await fetch(url);
-    if (!response.ok) {
-      console.warn('CBS bodemgebruik response niet ok:', response.status);
-      return createEmptyBodemgebruik();
-    }
-
-    const data = await response.json();
-
-    if (!data.value || data.value.length === 0) {
-      console.warn('Geen bodemgebruik data gevonden voor code:', codeToUse);
-      return createEmptyBodemgebruik();
-    }
-
-    // Map Measure codes naar waarden
-    const valueMap = new Map<string, number>();
-    for (const obs of data.value) {
-      if (obs.Value !== null && obs.Value !== undefined) {
-        valueMap.set(obs.Measure, obs.Value);
-      }
-    }
-
-    return {
-      totaalOppervlakte: valueMap.get('T001455') ?? null,
-      stedelijkGroen: valueMap.get('A052552') ?? null,
-      sportterrein: valueMap.get('A045816') ?? null,
-      recreatiefTerrein: valueMap.get('A045814_2') ?? null,
-      natuurlijkTerrein: valueMap.get('A045823_2') ?? null,
-    };
-  } catch (error) {
-    console.error('Fout bij ophalen bodemgebruik:', error);
-    return createEmptyBodemgebruik();
-  }
-}
-
-/**
- * Haal groenpercentage op van RIVM WFS service
- * Dit is het percentage groen gebaseerd op luchtfoto analyse
+ * Haal groenpercentage op uit Supabase
  */
 export async function fetchGroenpercentage(
   gebiedCode: string,
-  gebiedType: 'buurt' | 'wijk' | 'gemeente'
+  _gebiedType: 'buurt' | 'wijk' | 'gemeente'
 ): Promise<GroenpercentageData> {
-  const cacheKey = `${gebiedCode}_${gebiedType}`;
-  const cached = groenpercentageCache.get(cacheKey);
-
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
-  }
-
   try {
-    // RIVM WFS layer namen en code veld per gebiedstype
-    const layerConfig = {
-      buurt: { layer: 'rivm_2022_groenpercentage_kaart_per_buurt', codeField: 'bu_code' },
-      wijk: { layer: 'rivm_2022_groenpercentage_kaart_per_wijk', codeField: 'wk_code' },
-      gemeente: { layer: 'rivm_2022_groenpercentage_kaart_per_gemeente', codeField: 'gm_code' },
-    }[gebiedType];
+    const { data, error } = await supabase
+      .from('groenpercentage')
+      .select('percentage')
+      .eq('code', gebiedCode)
+      .order('jaar', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    // RIVM gebruikt bu_code, wk_code, of gm_code als identifier
-    const params = new URLSearchParams({
-      service: 'WFS',
-      version: '2.0.0',
-      request: 'GetFeature',
-      typeName: `ank:${layerConfig.layer}`,
-      outputFormat: 'application/json',
-      CQL_FILTER: `${layerConfig.codeField}='${gebiedCode}'`,
-    });
-
-    const response = await fetch(`${RIVM_WFS_BASE}?${params}`);
-
-    if (!response.ok) {
-      console.warn('RIVM WFS response niet ok:', response.status);
-      return { percentage: null };
-    }
-
-    const geojson = await response.json();
-    const feature = geojson.features?.[0];
-
-    if (!feature) {
-      console.warn('Geen RIVM groenpercentage gevonden voor:', gebiedCode);
-      return { percentage: null };
-    }
-
-    // Groenpercentage zit in _mean property (gemiddelde waarde)
-    const percentage = feature.properties?._mean ?? null;
-
-    const result: GroenpercentageData = {
-      percentage: percentage !== null ? Math.round(percentage * 10) / 10 : null,
-    };
-
-    groenpercentageCache.set(cacheKey, { data: result, timestamp: Date.now() });
-    return result;
-  } catch (error) {
-    console.error('Fout bij ophalen groenpercentage:', error);
+    if (error || !data) return { percentage: null };
+    return { percentage: data.percentage ?? null };
+  } catch {
     return { percentage: null };
   }
 }
@@ -165,18 +112,14 @@ export function calculateGroenMetrics(
   groenpercentage: GroenpercentageData,
   bevolking: number
 ): GroenMetrics {
-  // Tel alle groen oppervlaktes bij elkaar op (in hectares)
   const stedelijk = bodemgebruik.stedelijkGroen ?? 0;
   const sport = bodemgebruik.sportterrein ?? 0;
   const recreatief = bodemgebruik.recreatiefTerrein ?? 0;
   const natuurlijk = bodemgebruik.natuurlijkTerrein ?? 0;
 
   const totaalGroenHa = stedelijk + sport + recreatief + natuurlijk;
-
-  // Converteer naar m2 (1 ha = 10.000 m2)
   const totaalGroenM2 = totaalGroenHa * 10000;
 
-  // Bereken m2 per persoon
   let m2GroenPerPersoon: number | null = null;
   if (bevolking > 0 && totaalGroenHa > 0) {
     m2GroenPerPersoon = Math.round(totaalGroenM2 / bevolking);
@@ -191,26 +134,17 @@ export function calculateGroenMetrics(
 
 /**
  * Maak vergelijkingsdata voor verschillende gebiedsniveaus
- *
- * BELANGRIJK: Aangezien bodemgebruik data alleen op gemeente-niveau beschikbaar is,
- * gebruiken alle niveaus (buurt, wijk, gemeente) dezelfde m² per persoon waarde.
- * Dit voorkomt misleidende vergelijkingen met verkeerde bevolkingsaantallen.
+ * Haalt per niveau apart het groenpercentage op voor een eerlijke vergelijking
  */
-function createVergelijking(
+async function createVergelijking(
   gebiedType: 'buurt' | 'wijk' | 'gemeente',
   gebiedNaam: string,
   gebiedMetrics: GroenMetrics,
+  wijkCode?: string,
   wijkNaam?: string,
+  gemeenteCode?: string,
   gemeenteNaam?: string
-): LeefomgevingVergelijking {
-  // De metrics zijn al op gemeente-niveau berekend
-  // Alle niveaus krijgen dezelfde waarde voor consistentie
-  const gemeenteMetrics: LeefomgevingVergelijkingNiveau = {
-    naam: '',
-    m2PerPersoon: gebiedMetrics.m2GroenPerPersoon,
-    groenPercentage: gebiedMetrics.groenPercentage,
-  };
-
+): Promise<LeefomgevingVergelijking> {
   const vergelijking: LeefomgevingVergelijking = {
     nederland: {
       naam: 'Nederland',
@@ -219,43 +153,73 @@ function createVergelijking(
     },
   };
 
-  // Bij buurt selectie: toon buurt, wijk, gemeente (allemaal zelfde gemeente-waarde)
   if (gebiedType === 'buurt') {
-    vergelijking.buurt = { ...gemeenteMetrics, naam: gebiedNaam };
-    if (wijkNaam) {
-      vergelijking.wijk = { ...gemeenteMetrics, naam: wijkNaam };
+    vergelijking.buurt = {
+      naam: gebiedNaam,
+      m2PerPersoon: gebiedMetrics.m2GroenPerPersoon,
+      groenPercentage: gebiedMetrics.groenPercentage,
+    };
+
+    // Haal wijk-level groenpercentage apart op
+    if (wijkCode && wijkNaam) {
+      const wijkGroen = await fetchGroenpercentage(wijkCode, 'wijk');
+      vergelijking.wijk = {
+        naam: wijkNaam,
+        m2PerPersoon: gebiedMetrics.m2GroenPerPersoon, // m2 is gemeente-niveau, zelfde voor alle
+        groenPercentage: wijkGroen.percentage,
+      };
     }
-    if (gemeenteNaam) {
-      vergelijking.gemeente = { ...gemeenteMetrics, naam: gemeenteNaam };
+
+    // Haal gemeente-level groenpercentage apart op
+    if (gemeenteCode && gemeenteNaam) {
+      const gmGroen = await fetchGroenpercentage(gemeenteCode, 'gemeente');
+      vergelijking.gemeente = {
+        naam: gemeenteNaam,
+        m2PerPersoon: gebiedMetrics.m2GroenPerPersoon,
+        groenPercentage: gmGroen.percentage,
+      };
     }
-  }
-  // Bij wijk selectie: toon wijk, gemeente
-  else if (gebiedType === 'wijk') {
-    vergelijking.wijk = { ...gemeenteMetrics, naam: gebiedNaam };
-    if (gemeenteNaam) {
-      vergelijking.gemeente = { ...gemeenteMetrics, naam: gemeenteNaam };
+  } else if (gebiedType === 'wijk') {
+    vergelijking.wijk = {
+      naam: gebiedNaam,
+      m2PerPersoon: gebiedMetrics.m2GroenPerPersoon,
+      groenPercentage: gebiedMetrics.groenPercentage,
+    };
+
+    if (gemeenteCode && gemeenteNaam) {
+      const gmGroen = await fetchGroenpercentage(gemeenteCode, 'gemeente');
+      vergelijking.gemeente = {
+        naam: gemeenteNaam,
+        m2PerPersoon: gebiedMetrics.m2GroenPerPersoon,
+        groenPercentage: gmGroen.percentage,
+      };
     }
-  }
-  // Bij gemeente selectie: toon alleen gemeente
-  else {
-    vergelijking.gemeente = { ...gemeenteMetrics, naam: gebiedNaam };
+  } else {
+    vergelijking.gemeente = {
+      naam: gebiedNaam,
+      m2PerPersoon: gebiedMetrics.m2GroenPerPersoon,
+      groenPercentage: gebiedMetrics.groenPercentage,
+    };
   }
 
   return vergelijking;
 }
 
 /**
- * Haal bevolkingsaantal op voor een gebied
+ * Haal bevolkingsaantal op voor een gemeente uit kerncijfers
  */
 async function fetchBevolking(code: string): Promise<number> {
   try {
-    const url = `https://datasets.cbs.nl/odata/v1/CBS/85984NED/Observations?$filter=WijkenEnBuurten eq '${code}' and Measure eq 'T001036'`;
-    const response = await fetch(url);
+    const { data, error } = await supabase
+      .from('kerncijfers')
+      .select('bevolking')
+      .eq('code', code)
+      .order('jaar', { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (!response.ok) return 0;
-
-    const data = await response.json();
-    return data.value?.[0]?.Value ?? 0;
+    if (error || !data) return 0;
+    return data.bevolking?.totaal ?? 0;
   } catch {
     return 0;
   }
@@ -269,24 +233,20 @@ export async function fetchLeefomgevingData(
   gebiedType: 'buurt' | 'wijk' | 'gemeente',
   gebiedNaam: string,
   bevolking: number,
-  _wijkCode?: string, // Niet meer gebruikt, maar behouden voor API compatibiliteit
+  wijkCode?: string,
   wijkNaam?: string,
   gemeenteCode?: string,
-  gemeenteNaam?: string
+  gemeenteNaam?: string,
+  jaar?: number
 ): Promise<LeefomgevingData | null> {
   try {
-    // Bepaal of we gemeente-niveau data gebruiken (CBS 86211NED heeft geen buurt/wijk data)
     const isGemeenteNiveau = gebiedType !== 'gemeente';
 
-    // Haal bodemgebruik en groenpercentage parallel op
-    // NB: fetchBodemgebruik gebruikt automatisch gemeente code voor buurt/wijk
     const [bodemgebruik, groenpercentage] = await Promise.all([
-      fetchBodemgebruik(gebiedCode, gemeenteCode),
+      fetchBodemgebruik(gebiedCode, gemeenteCode, jaar),
       fetchGroenpercentage(gebiedCode, gebiedType),
     ]);
 
-    // Bij buurt/wijk: haal gemeente bevolking op voor consistente m² per persoon berekening
-    // (bodemgebruik is ook gemeente-niveau, dus we moeten gemeente bevolking gebruiken)
     let bevolkingVoorBerekening = bevolking;
     if (isGemeenteNiveau && gemeenteCode) {
       const gemeenteBevolking = await fetchBevolking(gemeenteCode);
@@ -295,16 +255,15 @@ export async function fetchLeefomgevingData(
       }
     }
 
-    // Bereken metrics met consistente bevolking (gemeente-niveau als bodemgebruik ook gemeente is)
     const metrics = calculateGroenMetrics(bodemgebruik, groenpercentage, bevolkingVoorBerekening);
 
-    // Haal vergelijking op
-    // Maak vergelijking (synchroon, geen extra API calls meer nodig)
-    const vergelijking = createVergelijking(
+    const vergelijking = await createVergelijking(
       gebiedType,
       gebiedNaam,
       metrics,
+      wijkCode,
       wijkNaam,
+      gemeenteCode,
       gemeenteNaam
     );
 
@@ -313,7 +272,7 @@ export async function fetchLeefomgevingData(
       groenpercentage,
       metrics,
       vergelijking,
-      dataJaar: 2022, // Bodemgebruik data is van 2022
+      dataJaar: bodemgebruik.dataJaar ?? 2022,
       isGemeenteNiveau,
     };
   } catch (error) {

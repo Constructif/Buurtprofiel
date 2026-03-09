@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { useGebiedStore } from '../../store/gebiedStore';
-import type { TabScore } from '../../types/scoring';
+import type { TabScore, IndicatorDetail } from '../../types/scoring';
 import { getClassificatieKleur } from '../../utils/scoring';
 
 interface TabScoreHeaderProps {
@@ -93,7 +93,7 @@ export function TabScoreHeader({ tabScore }: TabScoreHeaderProps) {
               justifyContent: 'center',
               padding: 0,
             }}
-            title="Berekening bekijken"
+            title="Hoe is dit cijfer berekend?"
           >
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10" />
@@ -117,6 +117,8 @@ export function TabScoreHeader({ tabScore }: TabScoreHeaderProps) {
               width: '380px',
               zIndex: 100,
               boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+              maxHeight: '70vh',
+              overflowY: 'auto',
             }}>
               {/* Tooltip pijltje */}
               <div style={{
@@ -130,77 +132,34 @@ export function TabScoreHeader({ tabScore }: TabScoreHeaderProps) {
                 borderBottom: '6px solid #1d1d1b',
               }} />
 
-              <p style={{ fontWeight: 600, marginBottom: '12px', fontSize: '13px' }}>
-                Berekening {tabScore.naam} ({tabScore.score.toFixed(1)})
+              <p style={{ fontWeight: 600, marginBottom: '6px', fontSize: '13px' }}>
+                Hoe is de {tabScore.naam}-score berekend?
               </p>
 
-              {/* Tabel header */}
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 65px 65px 50px 55px',
-                gap: '4px',
-                padding: '4px 0',
-                borderBottom: '1px solid rgba(255,255,255,0.2)',
-                fontSize: '10px',
-                color: '#9ca3af',
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}>
-                <span>Indicator</span>
-                <span style={{ textAlign: 'right' }}>Waarde</span>
-                <span style={{ textAlign: 'right' }}>Gem.</span>
-                <span style={{ textAlign: 'right' }}>Z</span>
-                <span style={{ textAlign: 'right' }}>Gewicht</span>
-              </div>
+              <p style={{ fontSize: '11px', color: '#d1d5db', marginBottom: '14px' }}>
+                Dit cijfer ({tabScore.score.toFixed(1)}) is opgebouwd uit {tabScore.indicatoren.filter(i => i.gewicht > 0).length} onderdelen.
+                Elk onderdeel wordt vergeleken met het {benchmarkType === 'nederland' ? 'landelijk' : 'gemeente-'}gemiddelde.
+                Een score van 6,0 betekent precies gemiddeld.
+              </p>
 
-              {/* Indicator rijen */}
+              {/* Indicator kaartjes */}
               {tabScore.indicatoren.filter(i => i.gewicht > 0).map((ind, idx) => (
-                <div key={idx} style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 65px 65px 50px 55px',
-                  gap: '4px',
-                  padding: '6px 0',
-                  borderBottom: idx < tabScore.indicatoren.filter(i => i.gewicht > 0).length - 1 ? '1px solid rgba(255,255,255,0.08)' : 'none',
-                }}>
-                  <span style={{ fontSize: '11px' }}>{ind.naam}</span>
-                  <span style={{ textAlign: 'right', fontWeight: 500 }}>
-                    {ind.eenheid === '€'
-                      ? `€${ind.waarde.toLocaleString('nl-NL')}`
-                      : `${ind.waarde}${ind.eenheid === '%' ? '%' : ind.eenheid ? ` ${ind.eenheid}` : ''}`
-                    }
-                  </span>
-                  <span style={{ textAlign: 'right', color: '#9ca3af' }}>
-                    {ind.gemiddelde > 0
-                      ? ind.eenheid === '€'
-                        ? `€${ind.gemiddelde.toLocaleString('nl-NL')}`
-                        : `${ind.gemiddelde}${ind.eenheid === '%' ? '%' : ''}`
-                      : '-'
-                    }
-                  </span>
-                  <span style={{
-                    textAlign: 'right',
-                    color: ind.zScore > 0.5 ? '#4ade80' : ind.zScore < -0.5 ? '#f87171' : '#9ca3af',
-                    fontWeight: ind.zScore !== 0 ? 500 : 400,
-                  }}>
-                    {ind.zScore !== 0 ? (ind.zScore > 0 ? '+' : '') + ind.zScore.toFixed(2) : '-'}
-                  </span>
-                  <span style={{ textAlign: 'right', color: '#9ca3af' }}>
-                    {Math.round(ind.gewicht * 100)}%
-                  </span>
-                </div>
+                <IndicatorRow key={idx} ind={ind} benchmarkType={benchmarkType} isLast={idx === tabScore.indicatoren.filter(i => i.gewicht > 0).length - 1} />
               ))}
 
-              {/* Methode uitleg */}
+              {/* Uitleg methode */}
               <div style={{
-                marginTop: '12px',
+                marginTop: '14px',
                 paddingTop: '10px',
                 borderTop: '1px solid rgba(255,255,255,0.15)',
-                fontSize: '10px',
+                fontSize: '11px',
                 color: '#9ca3af',
                 lineHeight: 1.6,
               }}>
-                <p>Methode: Z-score naar cijfer = 6.0 + z x 1.5</p>
-                <p>Gewogen gemiddelde van bovenstaande indicatoren</p>
+                <p style={{ marginBottom: '4px' }}>
+                  <strong style={{ color: '#d1d5db' }}>Hoe werkt de scoring?</strong>
+                </p>
+                <p>Elke waarde wordt vergeleken met het gemiddelde. Beter dan gemiddeld verhoogt de score, slechter verlaagt hem. De onderdelen worden gewogen samengevoegd tot het eindcijfer.</p>
               </div>
             </div>
           )}
@@ -208,4 +167,92 @@ export function TabScoreHeader({ tabScore }: TabScoreHeaderProps) {
       )}
     </div>
   );
+}
+
+function IndicatorRow({ ind, isLast }: { ind: IndicatorDetail; benchmarkType: string; isLast: boolean }) {
+  // Bereken een simpele vergelijking
+  const vergelijking = getVergelijking(ind);
+
+  return (
+    <div style={{
+      padding: '8px 0',
+      borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.08)',
+    }}>
+      {/* Naam + gewicht */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+        <span style={{ fontSize: '12px', fontWeight: 500 }}>{ind.naam}</span>
+        <span style={{ fontSize: '10px', color: '#9ca3af' }}>
+          telt {Math.round(ind.gewicht * 100)}% mee
+        </span>
+      </div>
+
+      {/* Waarde + vergelijking */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '2px' }}>
+        <span style={{ fontSize: '13px', fontWeight: 600 }}>
+          {formatWaarde(ind)}
+        </span>
+        {ind.gemiddelde > 0 && (
+          <span style={{
+            fontSize: '11px',
+            color: vergelijking.kleur,
+            fontWeight: 500,
+          }}>
+            {vergelijking.tekst}
+          </span>
+        )}
+      </div>
+
+      {/* Toelichting */}
+      {ind.toelichting && (
+        <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px', lineHeight: 1.4 }}>
+          {ind.toelichting}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function formatWaarde(ind: IndicatorDetail): string {
+  if (ind.eenheid === '€') return `\u20AC${ind.waarde.toLocaleString('nl-NL')}`;
+  if (ind.eenheid === '%') return `${ind.waarde}%`;
+  if (ind.eenheid === 'entropy') return `${ind.waarde}`;
+  if (ind.eenheid === 'van 3' || ind.eenheid === 'van 9') return `${ind.waarde} ${ind.eenheid}`;
+  if (ind.eenheid === 'm²') return `${ind.waarde} m\u00B2`;
+  if (ind.eenheid) return `${ind.waarde} ${ind.eenheid}`;
+  return `${ind.waarde}`;
+}
+
+function getVergelijking(ind: IndicatorDetail): { tekst: string; kleur: string } {
+  if (ind.gemiddelde <= 0) return { tekst: '', kleur: '#9ca3af' };
+
+  // Bereken verschil als percentage
+  const verschil = ((ind.waarde - ind.gemiddelde) / ind.gemiddelde) * 100;
+  const absVerschil = Math.abs(verschil);
+
+  if (absVerschil < 5) {
+    return { tekst: `(gemiddeld: ${formatGemiddelde(ind)})`, kleur: '#9ca3af' };
+  }
+
+  const richting = verschil > 0 ? 'hoger' : 'lager';
+  const kleur = getVerschilKleur(ind, verschil);
+
+  return {
+    tekst: `${Math.round(absVerschil)}% ${richting} dan gem.`,
+    kleur,
+  };
+}
+
+function formatGemiddelde(ind: IndicatorDetail): string {
+  if (ind.eenheid === '€') return `\u20AC${ind.gemiddelde.toLocaleString('nl-NL')}`;
+  if (ind.eenheid === '%') return `${ind.gemiddelde}%`;
+  return `${ind.gemiddelde}`;
+}
+
+function getVerschilKleur(ind: IndicatorDetail, verschil: number): string {
+  // Voor indicatoren waar lager beter is (eenzaamheid, moeite rondkomen, etc.)
+  const lagerIsBeter = ind.zScore < 0 ? verschil < 0 : verschil > 0;
+  // Als z-score 0 is (entropy/custom berekeningen), gebruik afwijking van gemiddelde
+  if (ind.zScore === 0) return '#9ca3af';
+
+  return lagerIsBeter ? '#4ade80' : '#f87171';
 }

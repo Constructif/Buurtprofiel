@@ -7,6 +7,7 @@ export interface BodemgebruikData {
   sportterrein: number | null;            // Sportterreinen in hectares
   recreatiefTerrein: number | null;       // Recreatief terrein in hectares
   natuurlijkTerrein: number | null;       // Natuurlijk terrein (bos etc.) in hectares
+  dataJaar?: number;                      // Jaar van de data
 }
 
 // Groenpercentage data (RIVM/Atlas Natuurlijk Kapitaal)

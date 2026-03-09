@@ -18,6 +18,7 @@ export interface IndicatorDetail {
   gemiddelde: number;
   zScore: number;
   gewicht: number;      // Proportioneel gewicht (0.0-1.0)
+  toelichting?: string;  // Menselijke uitleg van wat deze indicator meet
 }
 
 export interface TabScore {

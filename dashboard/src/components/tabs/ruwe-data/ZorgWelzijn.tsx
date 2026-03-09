@@ -89,7 +89,7 @@ const getEenzaamheidColor = (percentage: number | null): string => {
 };
 
 export function ZorgWelzijn() {
-  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData, selectedJaar } = useGebiedStore();
   const [zorgData, setZorgData] = useState<ZorgWelzijnData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +111,8 @@ export function ZorgWelzijn() {
           selectedGebied.gemeenteCode,
           selectedGebied.naam,
           selectedGebied.wijkNaam,
-          selectedGebied.gemeenteNaam
+          selectedGebied.gemeenteNaam,
+          selectedJaar,
         );
 
         setZorgData(data);
@@ -127,7 +128,7 @@ export function ZorgWelzijn() {
     };
 
     loadData();
-  }, [selectedGebied]);
+  }, [selectedGebied, selectedJaar]);
 
   // No selection state
   if (!selectedGebied) {

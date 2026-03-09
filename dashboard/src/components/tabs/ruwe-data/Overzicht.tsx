@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { BuurtMap } from '../../maps/BuurtMap';
 import {
@@ -15,7 +15,7 @@ import type { BuurtprofielScore, TabScore } from '../../../types/scoring';
 export function Overzicht() {
   const {
     gebiedData, selectedGebied, isLoadingData, getVoorzieningenCache,
-    benchmarkType, setBenchmarkType, gemeenteData,
+    benchmarkType, gemeenteData, selectedJaar,
   } = useGebiedStore();
 
   const [zorgData, setZorgData] = useState<ZorgWelzijnData | null>(null);
@@ -41,6 +41,7 @@ export function Overzicht() {
             selectedGebied.naam,
             selectedGebied.wijkNaam,
             selectedGebied.gemeenteNaam,
+            selectedJaar,
           ),
           fetchLeefomgevingData(
             selectedGebied.code,
@@ -51,6 +52,7 @@ export function Overzicht() {
             selectedGebied.wijkNaam,
             selectedGebied.gemeenteCode,
             selectedGebied.gemeenteNaam,
+            selectedJaar,
           ),
         ]);
         setZorgData(zorg);
@@ -63,7 +65,7 @@ export function Overzicht() {
     };
 
     loadExtraData();
-  }, [selectedGebied, gebiedData]);
+  }, [selectedGebied, gebiedData, selectedJaar]);
 
   if (!selectedGebied) {
     return (
@@ -118,22 +120,13 @@ export function Overzicht() {
 
           {/* Score Sectie */}
           <div className="overzicht-stats" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            {/* Benchmark Toggle */}
-            {!isGemeente && (
-              <BenchmarkToggle
-                value={benchmarkType}
-                onChange={setBenchmarkType}
-                gemeenteNaam={gemeenteData?.naam || gebiedData.gemeenteNaam}
-              />
-            )}
-
             {/* Hoofdscore */}
             <HoofdscoreCard buurtprofiel={buurtprofiel} isLoadingExtra={isLoadingExtra} />
 
             {/* Dimensie Cards */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0' }}>
               {Object.values(buurtprofiel.tabs).map((tab) => (
-                <DimensieCard key={tab.naam} tab={tab} />
+                <DimensieCard key={tab.naam} tab={tab} benchmarkType={activeBenchmarkType} />
               ))}
             </div>
 
@@ -150,63 +143,6 @@ export function Overzicht() {
   );
 }
 
-// --- Benchmark Toggle ---
-
-function BenchmarkToggle({
-  value,
-  onChange,
-  gemeenteNaam,
-}: {
-  value: 'nederland' | 'gemeente';
-  onChange: (v: 'nederland' | 'gemeente') => void;
-  gemeenteNaam?: string;
-}) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '4px',
-      backgroundColor: '#f3f4f6',
-      borderRadius: '6px',
-      padding: '3px',
-      fontSize: '12px',
-    }}>
-      <button
-        onClick={() => onChange('nederland')}
-        style={{
-          flex: 1,
-          padding: '6px 12px',
-          borderRadius: '4px',
-          border: 'none',
-          cursor: 'pointer',
-          fontWeight: value === 'nederland' ? 600 : 400,
-          backgroundColor: value === 'nederland' ? '#fff' : 'transparent',
-          color: value === 'nederland' ? '#1d1d1b' : '#6b7280',
-          boxShadow: value === 'nederland' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-        }}
-      >
-        Nederland
-      </button>
-      <button
-        onClick={() => onChange('gemeente')}
-        style={{
-          flex: 1,
-          padding: '6px 12px',
-          borderRadius: '4px',
-          border: 'none',
-          cursor: 'pointer',
-          fontWeight: value === 'gemeente' ? 600 : 400,
-          backgroundColor: value === 'gemeente' ? '#fff' : 'transparent',
-          color: value === 'gemeente' ? '#1d1d1b' : '#6b7280',
-          boxShadow: value === 'gemeente' ? '0 1px 2px rgba(0,0,0,0.1)' : 'none',
-        }}
-      >
-        {gemeenteNaam || 'Gemeente'}
-      </button>
-    </div>
-  );
-}
-
 // --- Hoofdscore Card ---
 
 function HoofdscoreCard({
@@ -216,7 +152,20 @@ function HoofdscoreCard({
   buurtprofiel: BuurtprofielScore;
   isLoadingExtra: boolean;
 }) {
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
   const kleur = getClassificatieKleur(buurtprofiel.classificatie);
+
+  useEffect(() => {
+    if (!showInfo) return;
+    const handleClick = (e: MouseEvent) => {
+      if (infoRef.current && !infoRef.current.contains(e.target as Node)) {
+        setShowInfo(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showInfo]);
 
   return (
     <div style={{
@@ -241,6 +190,76 @@ function HoofdscoreCard({
       <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>
         t.o.v. {buurtprofiel.benchmarkNaam}
       </p>
+
+      {/* Info icon */}
+      <div ref={infoRef} style={{ position: 'relative', display: 'inline-block', marginTop: '8px' }}>
+        <button
+          onClick={() => setShowInfo(!showInfo)}
+          style={{
+            width: '24px',
+            height: '24px',
+            borderRadius: '50%',
+            border: '1.5px solid #d1d5db',
+            backgroundColor: showInfo ? '#f3f4f6' : 'transparent',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 0,
+          }}
+          title="Hoe is dit cijfer opgebouwd?"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="10" />
+            <path d="M12 16v-4" />
+            <path d="M12 8h.01" />
+          </svg>
+        </button>
+
+        {showInfo && (
+          <div style={{
+            position: 'absolute',
+            top: '100%',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            marginTop: '8px',
+            padding: '14px 16px',
+            backgroundColor: '#1d1d1b',
+            color: 'white',
+            borderRadius: '8px',
+            fontSize: '12px',
+            lineHeight: 1.5,
+            width: '280px',
+            zIndex: 100,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+            textAlign: 'left',
+          }}>
+            <div style={{
+              position: 'absolute',
+              top: '-6px',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: 0,
+              height: 0,
+              borderLeft: '6px solid transparent',
+              borderRight: '6px solid transparent',
+              borderBottom: '6px solid #1d1d1b',
+            }} />
+            <p style={{ fontWeight: 600, marginBottom: '6px', fontSize: '13px' }}>
+              Hoe werkt het Buurtprofiel cijfer?
+            </p>
+            <p style={{ fontSize: '11px', color: '#d1d5db', marginBottom: '8px' }}>
+              Dit cijfer is samengesteld uit {buurtprofiel.aantalGemetenTabs} thema's: veiligheid, gezondheid, inkomen, wonen, voorzieningen, groen en bewoners.
+            </p>
+            <p style={{ fontSize: '11px', color: '#d1d5db', marginBottom: '8px' }}>
+              Elk thema wordt vergeleken met het gemiddelde. Een score van 6,0 betekent precies gemiddeld.
+            </p>
+            <p style={{ fontSize: '11px', color: '#9ca3af' }}>
+              Klik op een tab voor de details per thema.
+            </p>
+          </div>
+        )}
+      </div>
 
       {/* Datakwaliteit */}
       <div style={{
@@ -267,8 +286,11 @@ function HoofdscoreCard({
 
 // --- Dimensie Card ---
 
-function DimensieCard({ tab }: { tab: TabScore }) {
+function DimensieCard({ tab, benchmarkType }: { tab: TabScore; benchmarkType: 'nederland' | 'gemeente' }) {
   const kleur = tab.isGemeten ? getClassificatieKleur(tab.classificatie) : '#9ca3af';
+
+  // Toon of data werkelijk gemeente-specifiek is, of terugvalt op NL
+  const showFallbackWarning = benchmarkType === 'gemeente' && tab.isGemeenteData;
 
   return (
     <div style={{
@@ -288,7 +310,11 @@ function DimensieCard({ tab }: { tab: TabScore }) {
         </div>
         <div style={{ fontSize: '11px', color: '#6b7280' }}>
           {Math.round(tab.gewicht * 100)}% gewicht
-          {tab.isGemeenteData && <span style={{ fontStyle: 'italic', marginLeft: '4px' }}>(gem.)</span>}
+          {showFallbackWarning && (
+            <span style={{ fontStyle: 'italic', marginLeft: '4px', color: '#d97706' }} title="Data deels op gemeenteniveau, niet buurt-specifiek">
+              (gem. data)
+            </span>
+          )}
           {tab.confidence !== 'high' && tab.isGemeten && (
             <span style={{ fontStyle: 'italic', marginLeft: '4px' }}>
               ({tab.confidence === 'medium' ? 'beperkt' : 'weinig data'})

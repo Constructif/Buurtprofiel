@@ -39,6 +39,14 @@ interface GebiedStore {
   gemeenteData: GebiedData | null;
   setGemeenteData: (data: GebiedData | null) => void;
 
+  // Jaar selectie
+  selectedJaar: number;
+  setSelectedJaar: (jaar: number) => void;
+
+  // Data cache per jaar (key: `${code}_${jaar}`)
+  dataCache: Map<string, GebiedData>;
+  gemeenteDataCache: Map<string, GebiedData>;
+
   // Benchmark toggle
   benchmarkType: 'nederland' | 'gemeente';
   setBenchmarkType: (type: 'nederland' | 'gemeente') => void;
@@ -54,6 +62,10 @@ interface GebiedStore {
   prefetchVoorzieningen: (gebiedCode: string) => Promise<VoorzieningenCache | null>;
   getPrefetchStatus: (gebiedCode: string) => PrefetchStatus;
   waitForVoorzieningen: (gebiedCode: string) => Promise<VoorzieningenCache | null>;
+
+  // Gemeente filter voor zoeken (drill-down)
+  selectedGemeenteFilter: Gebied | null;
+  setSelectedGemeenteFilter: (gemeente: Gebied | null) => void;
 
   // Loading states
   isLoadingGebieden: boolean;
@@ -74,13 +86,49 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
 
   selectedGebied: null,
   setSelectedGebied: (gebied) => set({ selectedGebied: gebied }),
-  clearSelectedGebied: () => set({ selectedGebied: null, gebiedData: null, gemeenteData: null }),
+  clearSelectedGebied: () => set({
+    selectedGebied: null,
+    gebiedData: null,
+    gemeenteData: null,
+    dataCache: new Map(),
+    gemeenteDataCache: new Map(),
+  }),
 
   gebiedData: null,
   setGebiedData: (data) => set({ gebiedData: data }),
 
   gemeenteData: null,
   setGemeenteData: (data) => set({ gemeenteData: data }),
+
+  selectedJaar: 2025,
+  setSelectedJaar: (jaar) => {
+    const { selectedGebied, gebiedData, gemeenteData } = get();
+    // Cache huidige data voordat we wisselen
+    if (selectedGebied && gebiedData) {
+      const cacheKey = `${selectedGebied.code}_${get().selectedJaar}`;
+      const cache = new Map(get().dataCache);
+      cache.set(cacheKey, gebiedData);
+      const gmCache = new Map(get().gemeenteDataCache);
+      if (gemeenteData) {
+        gmCache.set(`${selectedGebied.code}_${get().selectedJaar}_gm`, gemeenteData);
+      }
+      set({ dataCache: cache, gemeenteDataCache: gmCache });
+    }
+    // Check of nieuwe jaar al gecached is
+    if (selectedGebied) {
+      const newKey = `${selectedGebied.code}_${jaar}`;
+      const cached = get().dataCache.get(newKey);
+      const cachedGm = get().gemeenteDataCache.get(`${newKey}_gm`);
+      if (cached) {
+        set({ selectedJaar: jaar, gebiedData: cached, gemeenteData: cachedGm ?? null });
+        return;
+      }
+    }
+    set({ selectedJaar: jaar });
+  },
+
+  dataCache: new Map(),
+  gemeenteDataCache: new Map(),
 
   benchmarkType: 'nederland',
   setBenchmarkType: (type) => set({ benchmarkType: type }),
@@ -219,6 +267,9 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
 
     return fetchPromise;
   },
+
+  selectedGemeenteFilter: null,
+  setSelectedGemeenteFilter: (gemeente) => set({ selectedGemeenteFilter: gemeente }),
 
   isLoadingGebieden: false,
   setIsLoadingGebieden: (loading) => set({ isLoadingGebieden: loading }),

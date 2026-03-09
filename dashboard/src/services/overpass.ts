@@ -1,4 +1,4 @@
-const OVERPASS_API = 'https://overpass-api.de/api/interpreter';
+import { supabase } from './supabase';
 
 export interface Voorziening {
   id: string;
@@ -20,226 +20,72 @@ export type VoorzieningType =
   | 'speelterrein'
   | 'wijkcentrum';
 
-interface OverpassElement {
-  type: string;
-  id: number;
-  lat?: number;
-  lon?: number;
-  center?: { lat: number; lon: number };
-  tags?: Record<string, string>;
-}
-
-interface OverpassResponse {
-  elements: OverpassElement[];
-}
-
 /**
- * Haalt voorzieningen op binnen een bounding box via de Overpass API
+ * Haalt voorzieningen op binnen een bounding box via Supabase (PostGIS)
  */
 export async function fetchVoorzieningen(
   bbox: [number, number, number, number]
 ): Promise<Voorziening[]> {
   const [south, west, north, east] = bbox;
 
-  // Overpass query voor alle voorzieningen
-  const query = `
-    [out:json][timeout:60];
-    (
-      // Alle scholen - we filteren later in JavaScript
-      node["amenity"="school"](${south},${west},${north},${east});
-      way["amenity"="school"](${south},${west},${north},${east});
-      relation["amenity"="school"](${south},${west},${north},${east});
-
-      // Kinderdagverblijven
-      node["amenity"="kindergarten"](${south},${west},${north},${east});
-      way["amenity"="kindergarten"](${south},${west},${north},${east});
-      relation["amenity"="kindergarten"](${south},${west},${north},${east});
-
-      // Supermarkten
-      node["shop"="supermarket"](${south},${west},${north},${east});
-      way["shop"="supermarket"](${south},${west},${north},${east});
-      relation["shop"="supermarket"](${south},${west},${north},${east});
-
-      // Huisartsen
-      node["amenity"="doctors"](${south},${west},${north},${east});
-      way["amenity"="doctors"](${south},${west},${north},${east});
-      relation["amenity"="doctors"](${south},${west},${north},${east});
-
-      // Religieuze centra
-      node["amenity"="place_of_worship"](${south},${west},${north},${east});
-      way["amenity"="place_of_worship"](${south},${west},${north},${east});
-      relation["amenity"="place_of_worship"](${south},${west},${north},${east});
-
-      // Sportverenigingen en sportcentra (alleen centres, geen individuele velden)
-      node["leisure"="sports_centre"](${south},${west},${north},${east});
-      way["leisure"="sports_centre"](${south},${west},${north},${east});
-      relation["leisure"="sports_centre"](${south},${west},${north},${east});
-
-      // Speelterreinen en sportvelden
-      node["leisure"="pitch"](${south},${west},${north},${east});
-      way["leisure"="pitch"](${south},${west},${north},${east});
-      relation["leisure"="pitch"](${south},${west},${north},${east});
-
-      // Wijkcentra
-      node["amenity"="community_centre"](${south},${west},${north},${east});
-      way["amenity"="community_centre"](${south},${west},${north},${east});
-      relation["amenity"="community_centre"](${south},${west},${north},${east});
-    );
-    out center;
-  `;
-
-  // Maak een AbortController voor timeout
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 45000); // 45 seconden timeout
-
   try {
-    const response = await fetch(OVERPASS_API, {
-      method: 'POST',
-      body: query,
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      signal: controller.signal,
-    });
+    // Gebruik de PostGIS functie get_voorzieningen_in_bbox
+    const { data, error } = await supabase
+      .rpc('get_voorzieningen_in_bbox', {
+        south,
+        west,
+        north,
+        east,
+      });
 
-    clearTimeout(timeoutId);
-
-    if (!response.ok) {
-      throw new Error(`Overpass API error: ${response.status}`);
+    if (error) {
+      console.error('Supabase voorzieningen error:', error);
+      throw new Error(`Voorzieningen ophalen mislukt: ${error.message}`);
     }
 
-    const data: OverpassResponse = await response.json();
+    if (!data || data.length === 0) return [];
 
-    return data.elements
-      .map((element) => parseElement(element))
-      .filter((v): v is Voorziening => v !== null);
+    // Converteer PostGIS response naar Voorziening objecten
+    return data
+      .map((row: { id: string; type: string; name: string; location: string; tags?: Record<string, string> }) => {
+        // PostGIS geeft location terug als GeoJSON of WKT
+        // De RPC functie retourneert de hele row incl. geometry
+        // We moeten lat/lon extraheren uit de location
+        let lat = 0;
+        let lon = 0;
+
+        if (typeof row.location === 'string') {
+          // WKT format: POINT(lon lat) of SRID=4326;POINT(lon lat)
+          const match = row.location.match(/POINT\(([^ ]+) ([^ ]+)\)/);
+          if (match) {
+            lon = parseFloat(match[1]);
+            lat = parseFloat(match[2]);
+          }
+        } else if (row.location && typeof row.location === 'object') {
+          // GeoJSON format: { type: "Point", coordinates: [lon, lat] }
+          const geojson = row.location as { coordinates?: [number, number] };
+          if (geojson.coordinates) {
+            lon = geojson.coordinates[0];
+            lat = geojson.coordinates[1];
+          }
+        }
+
+        if (lat === 0 && lon === 0) return null;
+
+        return {
+          id: row.id,
+          type: row.type as VoorzieningType,
+          name: row.name,
+          lat,
+          lon,
+          tags: row.tags ?? undefined,
+        };
+      })
+      .filter((v: Voorziening | null): v is Voorziening => v !== null);
   } catch (error) {
-    clearTimeout(timeoutId);
-
-    if (error instanceof Error && error.name === 'AbortError') {
-      console.error('Overpass API timeout na 45 seconden');
-      throw new Error('Timeout: Overpass API reageerde niet binnen 45 seconden');
-    }
-
     console.error('Error fetching voorzieningen:', error);
-    throw error; // Gooi error door zodat retry logica in store kan werken
+    throw error;
   }
-}
-
-/**
- * Converteert een Overpass element naar een Voorziening object
- */
-function parseElement(element: OverpassElement): Voorziening | null {
-  const tags = element.tags || {};
-
-  // Bepaal coördinaten
-  let lat: number;
-  let lon: number;
-
-  if (element.lat && element.lon) {
-    lat = element.lat;
-    lon = element.lon;
-  } else if (element.center) {
-    lat = element.center.lat;
-    lon = element.center.lon;
-  } else {
-    return null;
-  }
-
-  // Bepaal voorziening type
-  const type = determineVoorzieningType(tags);
-  if (!type) return null;
-
-  // Bepaal naam
-  const name = tags.name || tags['name:nl'] || `${getTypeLabel(type)} (geen naam)`;
-
-  return {
-    id: `${element.type}-${element.id}`,
-    type,
-    name,
-    lat,
-    lon,
-    tags,
-  };
-}
-
-/**
- * Bepaalt het voorziening type op basis van OSM tags
- */
-function determineVoorzieningType(tags: Record<string, string>): VoorzieningType | null {
-  const amenity = tags.amenity;
-  const shop = tags.shop;
-  const leisure = tags.leisure;
-
-  // Scholen
-  if (amenity === 'school') {
-    const schoolType = tags['school:type'];
-    const iscedLevel = tags['isced:level'];
-    const name = (tags.name || tags['name:nl'] || '').toLowerCase();
-
-    // Check voor middelbare school
-    if (schoolType === 'secondary' || iscedLevel?.match(/^3/)) {
-      return 'middelbare_school';
-    }
-
-    // Check naam voor hints over middelbare school
-    if (name.includes('vmbo') || name.includes('havo') || name.includes('vwo') ||
-        name.includes('mavo') || name.includes('gymnasium') || name.includes('lyceum') ||
-        name.includes('college') || name.includes('scholengemeenschap')) {
-      return 'middelbare_school';
-    }
-
-    // Check voor basisschool
-    if (schoolType === 'primary' || iscedLevel?.match(/^[0-2]$/)) {
-      return 'basisschool';
-    }
-
-    // Check naam voor hints over basisschool
-    if (name.includes('basisschool') || name.includes('obs') || name.includes('cbs') ||
-        name.includes('openbare school') || name.includes('katholieke school')) {
-      return 'basisschool';
-    }
-
-    // Als type onduidelijk blijft, return null zodat het niet automatisch als basisschool wordt aangemerkt
-    return null;
-  }
-
-  // Kinderdagverblijf
-  if (amenity === 'kindergarten') {
-    return 'kinderdagverblijf';
-  }
-
-  // Supermarkt
-  if (shop === 'supermarket') {
-    return 'supermarkt';
-  }
-
-  // Huisarts
-  if (amenity === 'doctors') {
-    return 'huisarts';
-  }
-
-  // Religieus centrum
-  if (amenity === 'place_of_worship') {
-    return 'religieus_centrum';
-  }
-
-  // Sport
-  if (leisure === 'sports_centre') {
-    return 'sportvereniging';
-  }
-
-  // Speelterrein
-  if (leisure === 'pitch') {
-    return 'speelterrein';
-  }
-
-  // Wijkcentrum
-  if (amenity === 'community_centre') {
-    return 'wijkcentrum';
-  }
-
-  return null;
 }
 
 /**

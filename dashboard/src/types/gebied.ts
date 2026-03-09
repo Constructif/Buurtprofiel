@@ -51,8 +51,8 @@ export interface WoningenData {
 
 export interface InkomenData {
   gemiddeld: number | null;  // null als niet beschikbaar (privacy/onvoldoende samples)
-  laagInkomenPercentage: number;
-  hoogInkomenPercentage: number;
+  laagInkomenPercentage: number | null;  // CBS quintiel: % personen in onderste 40% landelijk. null = geen data
+  hoogInkomenPercentage: number | null;  // CBS quintiel: % personen in bovenste 20% landelijk. null = geen data
   // Opleiding, werkgelegenheid en uitkeringen staan in WerkInkomenData (src/types/werkInkomen.ts)
 }
 

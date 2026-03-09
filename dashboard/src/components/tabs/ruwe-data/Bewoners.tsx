@@ -1,10 +1,14 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
+import { CardTrendChart } from '../../ui/CardTrendChart';
 import { InfoGrid } from '../../ui/InfoGrid';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenBewonersScore } from '../../../utils/scoring';
 import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { fetchKerncijfersForYear, fetchKerncijfersAllYears, fetchHerkomstLandForYear, fetchHerkomstLandAllYears } from '../../../services/cbs';
+import { useCardYear } from '../../../hooks/useCardYear';
+import type { HerkomstLandData } from '../../../types/gebied';
 import {
   BarChart,
   Bar,
@@ -31,11 +35,12 @@ function calculatePercentage(value: number, total: number): number {
 const COLORS = ['#eb6608', '#1d1d1b', '#3498db', '#2ecc71', '#e74c3c', '#9b59b6', '#f39c12', '#1abc9c', '#e91e63', '#00bcd4'];
 
 // Landen per continent voor kleurcodering (zwart = Europa, blauw = Buiten Europa)
-const EUROPESE_LANDEN = ['Duitsland', 'Polen', 'België', 'Roemenië', 'Bulgarije'];
+const EUROPESE_LANDEN = ['Duitsland', 'Polen', 'België', 'Roemenië', 'Bulgarije', 'Westers totaal'];
 
 // Bepaal kleur op basis van continent: zwart (#1d1d1b) voor Europa, blauw (#3498db) voor buiten Europa
 function getHerkomstLandKleur(land: string): string {
-  return EUROPESE_LANDEN.includes(land) ? '#1d1d1b' : '#3498db';
+  if (EUROPESE_LANDEN.includes(land)) return '#1d1d1b';
+  return '#3498db';
 }
 
 export function Bewoners() {
@@ -59,35 +64,77 @@ export function Bewoners() {
     );
   }
 
-  const { bevolking, huishoudens, kerncijfersJaar, herkomstLandGemeente, gemeenteNaam } = gebiedData;
-  const totaal = bevolking.totaal;
+  // Shared fetchers — elke Card krijgt zijn eigen hook instance
+  const kcFetcher = useCallback(
+    (jaar: number) => fetchKerncijfersForYear(gebiedData.code, jaar),
+    [gebiedData.code]
+  );
+  const kcTrendFetcher = useCallback(
+    () => fetchKerncijfersAllYears(gebiedData.code),
+    [gebiedData.code]
+  );
 
+  // Herkomst per Land fetchers
+  const gemeenteCode = selectedGebied.gemeenteCode || selectedGebied.code;
+  const herkomstLandFetcher = useCallback(
+    (jaar: number) => fetchHerkomstLandForYear(gemeenteCode, jaar),
+    [gemeenteCode]
+  );
+  const herkomstLandTrendFetcher = useCallback(
+    () => fetchHerkomstLandAllYears(gemeenteCode),
+    [gemeenteCode]
+  );
+
+  // Individuele hook instances per Card
+  const demografischCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+  const leeftijdCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+  const herkomstCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+  const huishoudensCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+  const herkomstLandCard = useCardYear<HerkomstLandData>(
+    gebiedData.herkomstLandGemeente?.dataJaar ?? 2025, herkomstLandFetcher, herkomstLandTrendFetcher
+  );
+
+  // Helper: extract bevolking+huishoudens data van een card hook
+  const getCardData = (card: typeof demografischCard) => {
+    const bev = card.overrideData?.bevolking ?? gebiedData.bevolking;
+    const hh = card.overrideData?.huishoudens ?? gebiedData.huishoudens;
+    const jaar = card.overrideData?._jaar ?? gebiedData.kerncijfersJaar;
+    return { bev, hh, jaar };
+  };
+
+  const demo = getCardData(demografischCard);
+  const leeft = getCardData(leeftijdCard);
+  const herk = getCardData(herkomstCard);
+  const huish = getCardData(huishoudensCard);
+
+  // Leeftijdsdata voor de leeftijd card
   const leeftijdData = [
-    { name: '0-14', value: bevolking.leeftijd_0_14, percentage: calculatePercentage(bevolking.leeftijd_0_14, totaal) },
-    { name: '15-24', value: bevolking.leeftijd_15_24, percentage: calculatePercentage(bevolking.leeftijd_15_24, totaal) },
-    { name: '25-44', value: bevolking.leeftijd_25_44, percentage: calculatePercentage(bevolking.leeftijd_25_44, totaal) },
-    { name: '45-64', value: bevolking.leeftijd_45_64, percentage: calculatePercentage(bevolking.leeftijd_45_64, totaal) },
-    { name: '65+', value: bevolking.leeftijd_65_plus, percentage: calculatePercentage(bevolking.leeftijd_65_plus, totaal) },
+    { name: '0-14', value: leeft.bev.leeftijd_0_14, percentage: calculatePercentage(leeft.bev.leeftijd_0_14, leeft.bev.totaal) },
+    { name: '15-24', value: leeft.bev.leeftijd_15_24, percentage: calculatePercentage(leeft.bev.leeftijd_15_24, leeft.bev.totaal) },
+    { name: '25-44', value: leeft.bev.leeftijd_25_44, percentage: calculatePercentage(leeft.bev.leeftijd_25_44, leeft.bev.totaal) },
+    { name: '45-64', value: leeft.bev.leeftijd_45_64, percentage: calculatePercentage(leeft.bev.leeftijd_45_64, leeft.bev.totaal) },
+    { name: '65+', value: leeft.bev.leeftijd_65_plus, percentage: calculatePercentage(leeft.bev.leeftijd_65_plus, leeft.bev.totaal) },
   ];
 
-  const totaalMigratie = bevolking.nederlands + bevolking.westers + bevolking.nietWesters;
+  // Herkomst data
+  const totaalMigratie = herk.bev.nederlands + herk.bev.westers + herk.bev.nietWesters;
   const cultuurData = [
-    { name: 'Nederland', value: bevolking.nederlands, percentage: calculatePercentage(bevolking.nederlands, totaalMigratie) },
-    { name: 'Europa (excl. NL)', value: bevolking.westers, percentage: calculatePercentage(bevolking.westers, totaalMigratie) },
-    { name: 'Buiten Europa', value: bevolking.nietWesters, percentage: calculatePercentage(bevolking.nietWesters, totaalMigratie) },
+    { name: 'Nederland', value: herk.bev.nederlands, percentage: calculatePercentage(herk.bev.nederlands, totaalMigratie) },
+    { name: 'Europa (excl. NL)', value: herk.bev.westers, percentage: calculatePercentage(herk.bev.westers, totaalMigratie) },
+    { name: 'Buiten Europa', value: herk.bev.nietWesters, percentage: calculatePercentage(herk.bev.nietWesters, totaalMigratie) },
   ];
 
-  // Huishoudens: eenpersoons = alleenstaanden, zonderKinderen = stellen zonder kinderen, metKinderen = gezinnen met kinderen
+  // Huishoudens data
   const huishoudensData = [
-    { name: 'Alleenstaand', value: huishoudens.eenpersoons },
-    { name: 'Paar zonder kinderen', value: huishoudens.zonderKinderen },
-    { name: 'Gezin met kinderen', value: huishoudens.metKinderen },
+    { name: 'Alleenstaand', value: huish.hh.eenpersoons },
+    { name: 'Paar zonder kinderen', value: huish.hh.zonderKinderen },
+    { name: 'Gezin met kinderen', value: huish.hh.metKinderen },
   ];
 
-  // Bepaal dichtheid interpretatie
-  const dichtheidLabel = bevolking.dichtheid > 5000 ? 'Zeer dicht'
-    : bevolking.dichtheid > 2500 ? 'Dicht'
-    : bevolking.dichtheid > 1000 ? 'Matig dicht'
+  // Dichtheid interpretatie
+  const dichtheidLabel = demo.bev.dichtheid > 5000 ? 'Zeer dicht'
+    : demo.bev.dichtheid > 2500 ? 'Dicht'
+    : demo.bev.dichtheid > 1000 ? 'Matig dicht'
     : 'Dunbevolkt';
 
   // Score berekening
@@ -96,253 +143,204 @@ export function Bewoners() {
     : NL_BENCHMARKS;
   const tabScore = berekenBewonersScore(gebiedData, benchmarks);
 
+  const { herkomstLandGemeente, gemeenteNaam } = gebiedData;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <TabScoreHeader tabScore={tabScore} />
+
       {/* Demografische gegevens */}
-      <Card title="Demografische Gegevens" badge="data" year={kerncijfersJaar}>
-        <InfoGrid
-          items={[
-            { label: 'Totaal inwoners', value: formatNumber(totaal) },
-          ]}
-        />
-        <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '14px', color: '#6b7280' }}>Bevolkingsdichtheid:</span>
-          <span style={{ fontSize: '14px', fontWeight: 600 }}>{formatNumber(bevolking.dichtheid)} per km²</span>
-          <span style={{
-            fontSize: '12px',
-            padding: '2px 8px',
-            backgroundColor: bevolking.dichtheid > 2500 ? '#fef3c7' : '#dcfce7',
-            color: bevolking.dichtheid > 2500 ? '#b45309' : '#15803d',
-            borderRadius: '4px'
-          }}>
-            {dichtheidLabel}
-          </span>
-          <div style={{ position: 'relative', display: 'inline-block' }}>
-            <button
-              onClick={() => setShowDichtheidInfo(!showDichtheidInfo)}
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '2px',
-                display: 'flex',
-                alignItems: 'center',
-              }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2">
-                <circle cx="12" cy="12" r="10" />
-                <path d="M12 16v-4M12 8h.01" />
-              </svg>
-            </button>
-            {showDichtheidInfo && (
-              <div
-                style={{
-                  position: 'absolute',
-                  bottom: '100%',
-                  left: '50%',
-                  transform: 'translateX(-50%)',
-                  marginBottom: '8px',
-                  padding: '12px',
-                  backgroundColor: '#1d1d1b',
-                  color: 'white',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  width: '280px',
-                  zIndex: 50,
-                  boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
-                }}
-              >
-                <p style={{ marginBottom: '8px' }}>
-                  <strong>Bevolkingsdichtheid</strong> = aantal inwoners per vierkante kilometer.
-                </p>
-                <p style={{ marginBottom: '8px' }}>
-                  Een <strong>hogere dichtheid</strong> betekent meer mensen op dezelfde oppervlakte (stedelijk).
-                  Een <strong>lagere dichtheid</strong> duidt op meer ruimte per persoon (landelijk).
-                </p>
-                <p style={{ fontSize: '11px', color: '#9ca3af' }}>
-                  Ter vergelijking: Amsterdam ~5.200/km², Nederland gemiddeld ~520/km²
-                </p>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '100%',
-                    left: '50%',
-                    transform: 'translateX(-50%)',
-                    width: 0,
-                    height: 0,
-                    borderLeft: '6px solid transparent',
-                    borderRight: '6px solid transparent',
-                    borderTop: '6px solid #1d1d1b',
-                  }}
-                />
+      <Card title="Demografische Gegevens" badge="data" year={demo.jaar}
+        onYearChange={demografischCard.handleYearChange} availableYears={demografischCard.availableYears}
+        activeYearMode={demografischCard.activeMode} yearsWithData={demografischCard.yearsWithData}>
+        {demografischCard.isLoading ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+        ) : demografischCard.activeMode === 'trend' && demografischCard.trendData ? (
+          <CardTrendChart
+            data={demografischCard.trendData}
+            lines={[
+              { key: 'bevolking', label: 'Bevolking', color: '#eb6608' },
+              { key: 'dichtheid', label: 'Dichtheid (per km²)', color: '#3498db' },
+            ]}
+          />
+        ) : (
+          <>
+            <InfoGrid items={[{ label: 'Totaal inwoners', value: formatNumber(demo.bev.totaal) }]} />
+            <div style={{ marginTop: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '14px', color: '#6b7280' }}>Bevolkingsdichtheid:</span>
+              <span style={{ fontSize: '14px', fontWeight: 600 }}>{formatNumber(demo.bev.dichtheid)} per km²</span>
+              <span style={{
+                fontSize: '12px', padding: '2px 8px',
+                backgroundColor: demo.bev.dichtheid > 2500 ? '#fef3c7' : '#dcfce7',
+                color: demo.bev.dichtheid > 2500 ? '#b45309' : '#15803d', borderRadius: '4px'
+              }}>{dichtheidLabel}</span>
+              <div style={{ position: 'relative', display: 'inline-block' }}>
+                <button onClick={() => setShowDichtheidInfo(!showDichtheidInfo)} style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex', alignItems: 'center' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2"><circle cx="12" cy="12" r="10" /><path d="M12 16v-4M12 8h.01" /></svg>
+                </button>
+                {showDichtheidInfo && (
+                  <div style={{ position: 'absolute', bottom: '100%', left: '50%', transform: 'translateX(-50%)', marginBottom: '8px', padding: '12px', backgroundColor: '#1d1d1b', color: 'white', borderRadius: '4px', fontSize: '12px', width: '280px', zIndex: 50, boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+                    <p style={{ marginBottom: '8px' }}><strong>Bevolkingsdichtheid</strong> = aantal inwoners per vierkante kilometer.</p>
+                    <p style={{ marginBottom: '8px' }}>Een <strong>hogere dichtheid</strong> betekent meer mensen op dezelfde oppervlakte (stedelijk). Een <strong>lagere dichtheid</strong> duidt op meer ruimte per persoon (landelijk).</p>
+                    <p style={{ fontSize: '11px', color: '#9ca3af' }}>Ter vergelijking: Amsterdam ~5.200/km², Nederland gemiddeld ~520/km²</p>
+                    <div style={{ position: 'absolute', top: '100%', left: '50%', transform: 'translateX(-50%)', width: 0, height: 0, borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '6px solid #1d1d1b' }} />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          </>
+        )}
       </Card>
 
       {/* Charts grid */}
       <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Leeftijdsverdeling */}
-        <Card title="Leeftijdsverdeling" badge="data" year={kerncijfersJaar}>
-          <div style={{ height: '320px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={leeftijdData}>
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value, _name, props) => {
+        <Card title="Leeftijdsverdeling" badge="data" year={leeft.jaar}
+          onYearChange={leeftijdCard.handleYearChange} availableYears={leeftijdCard.availableYears}
+          activeYearMode={leeftijdCard.activeMode} yearsWithData={leeftijdCard.yearsWithData}>
+          {leeftijdCard.isLoading ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+          ) : leeftijdCard.activeMode === 'trend' && leeftijdCard.trendData ? (
+            <CardTrendChart
+              data={leeftijdCard.trendData}
+              lines={[{ key: 'bevolking', label: 'Totaal bevolking', color: '#eb6608' }]}
+            />
+          ) : (
+            <div style={{ height: '320px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={leeftijdData}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip formatter={(value, _name, props) => {
                     const payload = props.payload as { percentage: number };
                     return [`${formatNumber(value as number)} (${payload.percentage}%)`, 'Aantal'];
-                  }}
-                />
-                <Bar dataKey="value" fill="#eb6608" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+                  }} />
+                  <Bar dataKey="value" fill="#eb6608" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
 
         {/* Herkomst */}
-        <Card title="Herkomst Bevolking" badge="data" year={kerncijfersJaar}>
-          <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-            Geboorteland van bewoner of ouders (CBS indeling)
-          </p>
-          <div style={{ height: '300px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={cultuurData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label={(entry) => `${entry.name} (${Math.round((entry.percent || 0) * 100)}%)`}
-                >
-                  {cultuurData.map((_, index) => (
-                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => formatNumber(value as number)} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        <Card title="Herkomst Bevolking" badge="data" year={herk.jaar}
+          onYearChange={herkomstCard.handleYearChange} availableYears={herkomstCard.availableYears}
+          activeYearMode={herkomstCard.activeMode} yearsWithData={herkomstCard.yearsWithData}>
+          {herkomstCard.isLoading ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+          ) : herkomstCard.activeMode === 'trend' && herkomstCard.trendData ? (
+            <CardTrendChart
+              data={herkomstCard.trendData}
+              lines={[{ key: 'bevolking', label: 'Totaal bevolking', color: '#eb6608' }]}
+            />
+          ) : (
+            <>
+              <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
+                Geboorteland van bewoner of ouders (CBS indeling)
+              </p>
+              <div style={{ height: '300px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={cultuurData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                      label={(entry) => `${entry.name} (${Math.round((entry.percent || 0) * 100)}%)`}>
+                      {cultuurData.map((_, index) => (
+                        <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value) => formatNumber(value as number)} />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </>
+          )}
         </Card>
       </div>
 
       {/* Herkomst per Land - Gemeente niveau */}
+      {(() => {
+        const hlData = herkomstLandCard.overrideData ?? herkomstLandGemeente;
+        const hlJaar = herkomstLandCard.overrideData?.dataJaar ?? herkomstLandGemeente?.dataJaar;
+        return (
       <Card
         title={`Herkomst per Land${gemeenteNaam && selectedGebied?.type !== 'gemeente' ? ` - Gemeente ${gemeenteNaam}` : ''}`}
-        badge={herkomstLandGemeente && herkomstLandGemeente.landen.length > 0 ? "data" : "placeholder"}
-        year={herkomstLandGemeente?.dataJaar}
+        badge={hlData && hlData.landen.length > 0 ? "data" : "placeholder"}
+        year={hlJaar}
+        onYearChange={herkomstLandCard.handleYearChange}
+        availableYears={herkomstLandCard.availableYears}
+        activeYearMode={herkomstLandCard.activeMode}
+        yearsWithData={herkomstLandCard.yearsWithData}
       >
-        {herkomstLandGemeente && herkomstLandGemeente.landen.length > 0 ? (
+        {herkomstLandCard.isLoading ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+        ) : herkomstLandCard.activeMode === 'trend' && herkomstLandCard.trendData ? (
+          <CardTrendChart
+            data={herkomstLandCard.trendData}
+            lines={[{ key: 'herkomstTotaal', label: 'Totaal migratie', color: '#3498db' }]}
+          />
+        ) : hlData && hlData.landen.length > 0 ? (
           (() => {
-            // Gebruik gemeente CBS data voor de hoofdcategorieën (niet buurt data!)
-            const gemBev = herkomstLandGemeente.gemeenteBevolking;
+            const gemBev = hlData.gemeenteBevolking;
             const gemeenteNederlands = gemBev?.nederlands ?? 0;
             const gemeenteWesters = gemBev?.westers ?? 0;
             const gemeenteNietWesters = gemBev?.nietWesters ?? 0;
-            const totaalMigratie = gemeenteNederlands + gemeenteWesters + gemeenteNietWesters;
-            const totaalBevolking = totaalMigratie > 0 ? totaalMigratie : (gemBev?.totaal ?? 0);
+            const totaalMigratieGem = gemeenteNederlands + gemeenteWesters + gemeenteNietWesters;
+            const totaalBevolking = totaalMigratieGem > 0 ? totaalMigratieGem : (gemBev?.totaal ?? 0);
 
-            // Percentages t.o.v. gemeente bevolking
             const percentageNederland = totaalBevolking > 0 ? Math.round((gemeenteNederlands / totaalBevolking) * 100) : 0;
             const percentageEuropa = totaalBevolking > 0 ? Math.round((gemeenteWesters / totaalBevolking) * 100) : 0;
             const percentageBuitenEuropa = totaalBevolking > 0 ? Math.round((gemeenteNietWesters / totaalBevolking) * 100) : 0;
 
-            // Splits landen in Europa en Buiten Europa
-            const europaLanden = herkomstLandGemeente.landen.filter(l => EUROPESE_LANDEN.includes(l.land));
-            const buitenEuropaLanden = herkomstLandGemeente.landen.filter(l => !EUROPESE_LANDEN.includes(l.land));
-
-            // Bereken totalen per groep uit PC4 data (voor relatieve verdeling)
+            const europaLanden = hlData.landen.filter(l => EUROPESE_LANDEN.includes(l.land));
+            const buitenEuropaLanden = hlData.landen.filter(l => !EUROPESE_LANDEN.includes(l.land));
             const totaalEuropaPC4 = europaLanden.reduce((sum, l) => sum + l.aantal, 0);
             const totaalBuitenEuropaPC4 = buitenEuropaLanden.reduce((sum, l) => sum + l.aantal, 0);
 
-            // Bereken percentages binnen elke groep, geschaald naar CBS totalen
-            // Europese landen: percentage binnen Europa groep, geschaald naar het CBS Europa percentage
             const europaLandenMetPercentage = europaLanden.map(l => ({
               ...l,
-              // Relatief aandeel binnen Europa (PC4) * CBS Europa percentage
               percentage: totaalEuropaPC4 > 0 && percentageEuropa > 0
-                ? Math.round((l.aantal / totaalEuropaPC4) * percentageEuropa * 10) / 10
-                : 0
+                ? Math.round((l.aantal / totaalEuropaPC4) * percentageEuropa * 10) / 10 : 0
             }));
-
-            // Buiten Europa landen: percentage binnen Buiten Europa groep, geschaald naar CBS percentage
             const buitenEuropaLandenMetPercentage = buitenEuropaLanden.map(l => ({
               ...l,
-              // Relatief aandeel binnen Buiten Europa (PC4) * CBS Buiten Europa percentage
               percentage: totaalBuitenEuropaPC4 > 0 && percentageBuitenEuropa > 0
-                ? Math.round((l.aantal / totaalBuitenEuropaPC4) * percentageBuitenEuropa * 10) / 10
-                : 0
+                ? Math.round((l.aantal / totaalBuitenEuropaPC4) * percentageBuitenEuropa * 10) / 10 : 0
             }));
-
-            // Combineer en sorteer op percentage (hoogste eerst), top 10
             const alleLandenMetPercentage = [
-              ...europaLandenMetPercentage,
-              ...buitenEuropaLandenMetPercentage
+              ...europaLandenMetPercentage, ...buitenEuropaLandenMetPercentage
             ].sort((a, b) => b.percentage - a.percentage).slice(0, 10);
 
             return (
               <>
-                {/* Samenvatting bovenaan */}
                 <div style={{ marginBottom: '20px', padding: '16px', backgroundColor: '#f9fafb', borderRadius: '4px' }}>
-                  <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-                    Herkomst bevolking (% van totaal) - CBS kerncijfers
-                  </p>
+                  <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>Herkomst bevolking (% van totaal) - CBS kerncijfers</p>
                   <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div style={{ width: '16px', height: '16px', backgroundColor: '#eb6608', borderRadius: '2px' }} />
-                      <div>
-                        <span style={{ fontSize: '20px', fontWeight: 600 }}>{percentageNederland}%</span>
-                        <span style={{ fontSize: '13px', color: '#6b7280', marginLeft: '6px' }}>Nederland</span>
-                      </div>
+                      <div><span style={{ fontSize: '20px', fontWeight: 600 }}>{percentageNederland}%</span><span style={{ fontSize: '13px', color: '#6b7280', marginLeft: '6px' }}>Nederland</span></div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div style={{ width: '16px', height: '16px', backgroundColor: '#1d1d1b', borderRadius: '2px' }} />
-                      <div>
-                        <span style={{ fontSize: '20px', fontWeight: 600 }}>{percentageEuropa}%</span>
-                        <span style={{ fontSize: '13px', color: '#6b7280', marginLeft: '6px' }}>Europa</span>
-                      </div>
+                      <div><span style={{ fontSize: '20px', fontWeight: 600 }}>{percentageEuropa}%</span><span style={{ fontSize: '13px', color: '#6b7280', marginLeft: '6px' }}>Europa</span></div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <div style={{ width: '16px', height: '16px', backgroundColor: '#3498db', borderRadius: '2px' }} />
-                      <div>
-                        <span style={{ fontSize: '20px', fontWeight: 600 }}>{percentageBuitenEuropa}%</span>
-                        <span style={{ fontSize: '13px', color: '#6b7280', marginLeft: '6px' }}>Buiten Europa</span>
-                      </div>
+                      <div><span style={{ fontSize: '20px', fontWeight: 600 }}>{percentageBuitenEuropa}%</span><span style={{ fontSize: '13px', color: '#6b7280', marginLeft: '6px' }}>Buiten Europa</span></div>
                     </div>
                   </div>
-                  <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>
-                    Gemeente {gemeenteNaam || selectedGebied?.gemeenteNaam}: {formatNumber(totaalBevolking)} inwoners
-                  </p>
+                  <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '8px' }}>Gemeente {gemeenteNaam || selectedGebied?.gemeenteNaam}: {formatNumber(totaalBevolking)} inwoners</p>
                 </div>
-
-                <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-                  Top 10 herkomstlanden (geschat % van totale gemeente bevolking)
-                </p>
+                <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>Top 10 herkomstlanden (geschat % van totale gemeente bevolking)</p>
                 <div style={{ height: '320px' }}>
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
-                      data={alleLandenMetPercentage}
-                      layout="vertical"
-                      margin={{ left: 80, right: 30 }}
-                    >
+                    <BarChart data={alleLandenMetPercentage} layout="vertical" margin={{ left: 80, right: 30 }}>
                       <XAxis type="number" unit="%" domain={[0, 'auto']} />
                       <YAxis type="category" dataKey="land" tick={{ fontSize: 12 }} width={75} />
-                      <Tooltip
-                        formatter={(value, _name, props) => {
-                          const land = (props.payload as { land: string })?.land;
-                          const isEuropa = land ? EUROPESE_LANDEN.includes(land) : false;
-                          return [
-                            `${value}% van totale bevolking`,
-                            isEuropa ? 'Europa' : 'Buiten Europa'
-                          ];
-                        }}
-                      />
+                      <Tooltip formatter={(value, _name, props) => {
+                        const land = (props.payload as { land: string })?.land;
+                        const isEuropa = land ? EUROPESE_LANDEN.includes(land) : false;
+                        return [`${value}% van totale bevolking`, isEuropa ? 'Europa' : 'Buiten Europa'];
+                      }} />
                       <Bar dataKey="percentage" radius={[0, 4, 4, 0]}>
                         {alleLandenMetPercentage.map((item, index) => (
                           <Cell key={index} fill={getHerkomstLandKleur(item.land)} />
@@ -353,65 +351,66 @@ export function Bewoners() {
                 </div>
                 <div style={{ marginTop: '16px', display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {alleLandenMetPercentage.map((item) => (
-                    <div
-                      key={item.land}
-                      style={{
-                        padding: '4px 10px',
-                        backgroundColor: '#f3f4f6',
-                        borderRadius: '4px',
-                        fontSize: '12px',
-                        borderLeft: `3px solid ${getHerkomstLandKleur(item.land)}`,
-                      }}
-                    >
-                      <span style={{ fontWeight: 500 }}>{item.land}:</span>{' '}
-                      <span>{item.percentage}%</span>
+                    <div key={item.land} style={{ padding: '4px 10px', backgroundColor: '#f3f4f6', borderRadius: '4px', fontSize: '12px', borderLeft: `3px solid ${getHerkomstLandKleur(item.land)}` }}>
+                      <span style={{ fontWeight: 500 }}>{item.land}:</span> <span>{item.percentage}%</span>
                     </div>
                   ))}
                 </div>
-                <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '12px' }}>
-                  Percentages berekend: CBS kerncijfers (Europa/Buiten Europa) × relatieve verdeling uit PC4 postcodedata
-                </p>
+                <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '12px' }}>Percentages berekend: CBS kerncijfers (Europa/Buiten Europa) × relatieve verdeling uit PC4 postcodedata</p>
               </>
             );
           })()
         ) : (
           <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
             <p style={{ marginBottom: '8px' }}>Herkomst per land niet beschikbaar voor deze gemeente</p>
-            <p style={{ fontSize: '12px' }}>
-              CBS biedt alleen gedetailleerde herkomstdata voor de grote gemeenten (Amsterdam, Rotterdam, Den Haag, Utrecht, Groningen, Almere, Eindhoven, Tilburg)
-            </p>
+            <p style={{ fontSize: '12px' }}>CBS biedt alleen gedetailleerde herkomstdata voor de grote gemeenten (Amsterdam, Rotterdam, Den Haag, Utrecht, Groningen, Almere, Eindhoven, Tilburg)</p>
           </div>
         )}
       </Card>
+        );
+      })()}
 
       {/* Huishoudenstypen */}
-      <Card title="Huishoudenstypen" badge="data" year={kerncijfersJaar}>
-        <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', flexWrap: 'wrap' }}>
-          <div>
-            <span style={{ fontSize: '12px', color: '#6b7280' }}>Totaal huishoudens</span>
-            <p style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>{formatNumber(huishoudens.totaal)}</p>
-          </div>
-          <div>
-            <span style={{ fontSize: '12px', color: '#6b7280' }}>Gem. huishoudensgrootte</span>
-            <p style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>{huishoudens.gemiddeldeGrootte.toFixed(1)} personen</p>
-          </div>
-        </div>
-        <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
-          Een huishouden = personen die samen wonen en een gezamenlijke huishouding voeren
-        </p>
-        <div style={{ height: '256px' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={huishoudensData}>
-              <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-              <YAxis />
-              <Tooltip formatter={(value) => formatNumber(value as number)} />
-              <Bar dataKey="value" fill="#1d1d1b" radius={[0, 0, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '12px' }}>
-          Alleenstaand = 1-persoons huishouden | Paar zonder kinderen = 2 volwassenen | Gezin = huishouden met thuiswonende kinderen
-        </p>
+      <Card title="Huishoudenstypen" badge="data" year={huish.jaar}
+        onYearChange={huishoudensCard.handleYearChange} availableYears={huishoudensCard.availableYears}
+        activeYearMode={huishoudensCard.activeMode} yearsWithData={huishoudensCard.yearsWithData}>
+        {huishoudensCard.isLoading ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+        ) : huishoudensCard.activeMode === 'trend' && huishoudensCard.trendData ? (
+          <CardTrendChart
+            data={huishoudensCard.trendData}
+            lines={[{ key: 'huishoudens', label: 'Totaal huishoudens', color: '#1d1d1b' }]}
+          />
+        ) : (
+          <>
+            <div style={{ display: 'flex', gap: '24px', marginBottom: '16px', flexWrap: 'wrap' }}>
+              <div>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Totaal huishoudens</span>
+                <p style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>{formatNumber(huish.hh.totaal)}</p>
+              </div>
+              <div>
+                <span style={{ fontSize: '12px', color: '#6b7280' }}>Gem. huishoudensgrootte</span>
+                <p style={{ fontSize: '20px', fontWeight: 600, margin: 0 }}>{huish.hh.gemiddeldeGrootte.toFixed(1)} personen</p>
+              </div>
+            </div>
+            <p style={{ fontSize: '12px', color: '#6b7280', marginBottom: '12px' }}>
+              Een huishouden = personen die samen wonen en een gezamenlijke huishouding voeren
+            </p>
+            <div style={{ height: '256px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={huishoudensData}>
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis />
+                  <Tooltip formatter={(value) => formatNumber(value as number)} />
+                  <Bar dataKey="value" fill="#1d1d1b" radius={[0, 0, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <p style={{ fontSize: '11px', color: '#9ca3af', marginTop: '12px' }}>
+              Alleenstaand = 1-persoons huishouden | Paar zonder kinderen = 2 volwassenen | Gezin = huishouden met thuiswonende kinderen
+            </p>
+          </>
+        )}
       </Card>
     </div>
   );

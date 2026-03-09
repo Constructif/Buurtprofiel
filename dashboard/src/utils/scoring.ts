@@ -111,28 +111,37 @@ export function berekenBewonersScore(data: GebiedData, benchmarks: BenchmarkSet)
     bev.leeftijd_45_64, bev.leeftijd_65_plus,
   ]);
   const leeftijdScore = entropyToGrade(leeftijdEntropy);
-  scores.push({ score: leeftijdScore, weight: 0.30 });
-  indicatoren.push({ naam: 'Leeftijdsbalans', waarde: Math.round(leeftijdEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0.95, zScore: 0, gewicht: 0.30 });
+  scores.push({ score: leeftijdScore, weight: 0.20 });
+  indicatoren.push({ naam: 'Leeftijdsbalans', waarde: Math.round(leeftijdEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0.95, zScore: 0, gewicht: 0.20, toelichting: 'Meet hoe goed de leeftijdsgroepen verdeeld zijn. Een evenwichtige mix scoort hoger.' });
 
-  // 2. Bevolkingsdichtheid (omgekeerde U-curve, optimaal 1000-3000/km²)
+  // 2. Vergrijzingsratio (hoger = slechter, NL gem ~20%)
+  if (bev.totaal > 0 && bev.leeftijd_65_plus > 0) {
+    const vergrijzingsPerc = (bev.leeftijd_65_plus / bev.totaal) * 100;
+    const vergrijzZ = zScore(vergrijzingsPerc, 20, 8); // NL gem ~20%, stdDev ~8%
+    const vergrijzScore = zScoreToGrade(-vergrijzZ); // hoger vergrijzing = lagere score
+    scores.push({ score: vergrijzScore, weight: 0.15 });
+    indicatoren.push({ naam: 'Vergrijzing', waarde: Math.round(vergrijzingsPerc * 10) / 10, eenheid: '%', gemiddelde: 20, zScore: Math.round(-vergrijzZ * 100) / 100, gewicht: 0.15, toelichting: 'Percentage 65-plussers. Landelijk gemiddelde is ~20%. Sterke vergrijzing drukt de score.' });
+  }
+
+  // 3. Bevolkingsdichtheid (omgekeerde U-curve, optimaal 1000-3000/km²)
   if (bev.dichtheid > 0) {
     const logD = Math.log10(Math.max(bev.dichtheid, 1));
     const optimal = Math.log10(2000); // ~3.3
     const afwijking = Math.abs(logD - optimal);
     const dichtheidScore = Math.max(1.0, Math.min(10.0, 8.5 - afwijking * 3));
-    scores.push({ score: dichtheidScore, weight: 0.20 });
-    indicatoren.push({ naam: 'Bevolkingsdichtheid', waarde: Math.round(bev.dichtheid), eenheid: '/km²', gemiddelde: benchmarks.dichtheid.gemiddelde, zScore: 0, gewicht: 0.20 });
+    scores.push({ score: dichtheidScore, weight: 0.15 });
+    indicatoren.push({ naam: 'Bevolkingsdichtheid', waarde: Math.round(bev.dichtheid), eenheid: '/km²', gemiddelde: benchmarks.dichtheid.gemiddelde, zScore: 0, gewicht: 0.15, toelichting: 'Optimaal rond 2.000/km². Niet te druk en niet te leeg scoort het best.' });
   }
 
-  // 3. Huishoudensmix (Shannon entropy van 3 types)
+  // 4. Huishoudensmix (Shannon entropy van 3 types)
   if (hh.totaal > 0) {
     const hhEntropy = shannonEntropy([hh.eenpersoons, hh.zonderKinderen, hh.metKinderen]);
     const hhScore = entropyToGrade(hhEntropy);
     scores.push({ score: hhScore, weight: 0.25 });
-    indicatoren.push({ naam: 'Huishoudensmix', waarde: Math.round(hhEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0.95, zScore: 0, gewicht: 0.25 });
+    indicatoren.push({ naam: 'Huishoudensmix', waarde: Math.round(hhEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0.95, zScore: 0, gewicht: 0.25, toelichting: 'Meet de mix van alleenstaanden, stellen en gezinnen. Meer variatie scoort hoger.' });
   }
 
-  // 4. Bevolkingsdynamiek (netto migratie)
+  // 5. Bevolkingsdynamiek (netto migratie)
   if (data.bevolkingsDynamiek && data.bevolkingsDynamiek.jaren.length > 0) {
     const recentJaar = data.bevolkingsDynamiek.jaren[data.bevolkingsDynamiek.jaren.length - 1];
     // Mild positief saldo = best, bereken per 1000 als we bevolking hebben
@@ -140,7 +149,7 @@ export function berekenBewonersScore(data: GebiedData, benchmarks: BenchmarkSet)
     // Mild positief (+5/1000) = 7.5, neutraal = 6.0, sterk negatief (-10/1000) = 4.0
     const dynamiekScore = Math.max(1.0, Math.min(9.0, 6.0 + saldoPer1000 * 0.3));
     scores.push({ score: dynamiekScore, weight: 0.25 });
-    indicatoren.push({ naam: 'Migratiesaldo', waarde: Math.round(saldoPer1000 * 10) / 10, eenheid: 'per 1.000', gemiddelde: 0, zScore: 0, gewicht: 0.25 });
+    indicatoren.push({ naam: 'Migratiesaldo', waarde: Math.round(saldoPer1000 * 10) / 10, eenheid: 'per 1.000', gemiddelde: 0, zScore: 0, gewicht: 0.25, toelichting: 'Verschil tussen vestiging en vertrek. Lichte groei is positief, krimp drukt de score.' });
   }
 
   if (scores.length === 0) return makeTabScore('Bewoners', null, 0.08, []);
@@ -159,10 +168,10 @@ export function berekenWonenScore(data: GebiedData, benchmarks: BenchmarkSet): T
   const scores: { score: number; weight: number }[] = [];
   const indicatoren: IndicatorDetail[] = [];
 
-  // 1. Kooppercentage (hoger = beter)
-  const koopZ = zScore(w.koopPercentage, benchmarks.koopPercentage.gemiddelde, benchmarks.koopPercentage.stdDev);
-  scores.push({ score: zScoreToGrade(koopZ), weight: 0.35 });
-  indicatoren.push({ naam: 'Koopwoningen', waarde: Math.round(w.koopPercentage), eenheid: '%', gemiddelde: benchmarks.koopPercentage.gemiddelde, zScore: Math.round(koopZ * 100) / 100, gewicht: 0.35 });
+  // 1. Kooppercentage (omgekeerde U-curve: mix is beter, optimaal ~57%)
+  const koopScore = invertedUScore(w.koopPercentage, 57, 40);
+  scores.push({ score: koopScore, weight: 0.25 });
+  indicatoren.push({ naam: 'Koopwoningen', waarde: Math.round(w.koopPercentage), eenheid: '%', gemiddelde: benchmarks.koopPercentage.gemiddelde, zScore: 0, gewicht: 0.25, toelichting: 'Aandeel koopwoningen. Een gezonde mix van koop en huur (~57%) scoort het best.' });
 
   // 2. Woningtypediversiteit (entropy van 5 types)
   const types = [w.meergezinsPercentage, w.tussenwoningPercentage, w.hoekwoningPercentage, w.tweeOnderEenKapPercentage, w.vrijstaandPercentage];
@@ -170,19 +179,19 @@ export function berekenWonenScore(data: GebiedData, benchmarks: BenchmarkSet): T
   if (typeTotal > 0) {
     const typeEntropy = shannonEntropy(types);
     const typeScore = entropyToGrade(typeEntropy);
-    scores.push({ score: typeScore, weight: 0.25 });
-    indicatoren.push({ naam: 'Woningtypemix', waarde: Math.round(typeEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0, zScore: 0, gewicht: 0.25 });
+    scores.push({ score: typeScore, weight: 0.30 });
+    indicatoren.push({ naam: 'Woningtypemix', waarde: Math.round(typeEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0, zScore: 0, gewicht: 0.30, toelichting: 'Variatie in woningtypes (appartement, tussenwoning, vrijstaand, etc.). Meer variatie scoort hoger.' });
   }
 
   // 3. Sociaal huur ratio (omgekeerde U-curve, optimaal ~25-35%)
   const sociaalScore = invertedUScore(w.huurSociaalPercentage, 30, 30);
-  scores.push({ score: sociaalScore, weight: 0.20 });
-  indicatoren.push({ naam: 'Sociale huur', waarde: Math.round(w.huurSociaalPercentage), eenheid: '%', gemiddelde: benchmarks.huurSociaal.gemiddelde, zScore: 0, gewicht: 0.20 });
+  scores.push({ score: sociaalScore, weight: 0.30 });
+  indicatoren.push({ naam: 'Sociale huur', waarde: Math.round(w.huurSociaalPercentage), eenheid: '%', gemiddelde: benchmarks.huurSociaal.gemiddelde, zScore: 0, gewicht: 0.30, toelichting: 'Aandeel sociale huurwoningen. Optimaal rond 30%. Te veel of te weinig drukt de score.' });
 
-  // 4. Particulier huur ratio (lager = beter, hoog wijst op betaalbaarheidsproblemen)
-  const privZ = zScore(w.huurParticulierPercentage, benchmarks.huurParticulier.gemiddelde, benchmarks.huurParticulier.stdDev);
-  scores.push({ score: zScoreToGrade(-privZ), weight: 0.20 });
-  indicatoren.push({ naam: 'Particuliere huur', waarde: Math.round(w.huurParticulierPercentage), eenheid: '%', gemiddelde: benchmarks.huurParticulier.gemiddelde, zScore: Math.round(-privZ * 100) / 100, gewicht: 0.20 });
+  // 4. Particulier huur ratio (omgekeerde U-curve, optimaal rond NL-gemiddelde ~14%)
+  const privScore = invertedUScore(w.huurParticulierPercentage, 14, 20);
+  scores.push({ score: privScore, weight: 0.15 });
+  indicatoren.push({ naam: 'Particuliere huur', waarde: Math.round(w.huurParticulierPercentage), eenheid: '%', gemiddelde: benchmarks.huurParticulier.gemiddelde, zScore: 0, gewicht: 0.15, toelichting: 'Aandeel particuliere huur. Optimaal rond 14%. Sterk afwijkend drukt de score.' });
 
   const totalWeight = scores.reduce((s, sc) => s + sc.weight, 0);
   const finalScore = scores.reduce((s, sc) => s + sc.score * (sc.weight / totalWeight), 0);
@@ -211,13 +220,24 @@ export function berekenVeiligheidScore(data: GebiedData, benchmarks: BenchmarkSe
   // Formule: als waarde = benchmark → 6.0 (voldoende), lager = beter
   const veiligheidZ = zScore(gewogenPer1000, gemBenchmark, benchmarks.gewogenMisdrijvenPer1000.stdDev);
   const coreScore = zScoreToGrade(-veiligheidZ); // inversed: lager = beter
-  scores.push({ score: coreScore, weight: 0.70 });
+  scores.push({ score: coreScore, weight: 0.60 });
   indicatoren.push(
-    { naam: 'Misdrijven per 1.000', waarde: Math.round(misdrijvenPer1000 * 10) / 10, eenheid: '', gemiddelde: 46, zScore: 0, gewicht: 0 },
-    { naam: 'Gewogen per 1.000', waarde: Math.round(gewogenPer1000 * 10) / 10, eenheid: '', gemiddelde: Math.round(gemBenchmark * 10) / 10, zScore: Math.round(-veiligheidZ * 100) / 100, gewicht: 0.70 },
+    { naam: 'Misdrijven per 1.000', waarde: Math.round(misdrijvenPer1000 * 10) / 10, eenheid: '', gemiddelde: 46, zScore: 0, gewicht: 0, toelichting: 'Totaal aantal geregistreerde misdrijven per 1.000 inwoners.' },
+    { naam: 'Gewogen per 1.000', waarde: Math.round(gewogenPer1000 * 10) / 10, eenheid: '', gemiddelde: Math.round(gemBenchmark * 10) / 10, zScore: Math.round(-veiligheidZ * 100) / 100, gewicht: 0.60, toelichting: 'Zware delicten (geweld, inbraak) tellen 2,5x zwaarder mee. Minder misdrijven = hogere score.' },
   );
 
-  // 2. Trend (3 jaar)
+  // 2. Overlast (drugsoverlast + burengerucht, lager = beter)
+  const overlastTotaal = (data.criminaliteit.drugsOverlast || 0) + (data.criminaliteit.burengerucht || 0);
+  if (overlastTotaal > 0) {
+    const overlastPer1000 = (overlastTotaal / bevolking) * 1000;
+    // NL gem ~5 per 1000, lager = beter
+    const overlastZ = zScore(overlastPer1000, 5, 4);
+    const overlastScore = zScoreToGrade(-overlastZ);
+    scores.push({ score: overlastScore, weight: 0.10 });
+    indicatoren.push({ naam: 'Overlast per 1.000', waarde: Math.round(overlastPer1000 * 10) / 10, eenheid: '', gemiddelde: 5, zScore: Math.round(-overlastZ * 100) / 100, gewicht: 0.10, toelichting: 'Drugsoverlast en burengerucht per 1.000 inwoners. Minder overlast = hogere score.' });
+  }
+
+  // 3. Trend (3 jaar)
   if (data.criminaliteitTrend?.jaren && data.criminaliteitTrend.jaren.length >= 3) {
     const jaren = data.criminaliteitTrend.jaren;
     const recent = jaren[jaren.length - 1].totaal;
@@ -227,17 +247,17 @@ export function berekenVeiligheidScore(data: GebiedData, benchmarks: BenchmarkSe
       // -20% = 8.0 (sterk dalend), 0% = 6.0 (stabiel), +20% = 4.0 (stijgend)
       const trendScore = Math.max(1.0, Math.min(10.0, 6.0 - changePercent * 0.1));
       scores.push({ score: trendScore, weight: 0.15 });
-      indicatoren.push({ naam: 'Trend (3 jaar)', waarde: Math.round(changePercent), eenheid: '%', gemiddelde: 0, zScore: 0, gewicht: 0.15 });
+      indicatoren.push({ naam: 'Trend (3 jaar)', waarde: Math.round(changePercent), eenheid: '%', gemiddelde: 0, zScore: 0, gewicht: 0.15, toelichting: 'Verandering criminaliteit over 3 jaar. Daling is positief, stijging drukt de score.' });
     }
   }
 
-  // 3. High-impact ratio
+  // 4. High-impact ratio
   if (data.criminaliteit.totaal > 0) {
     const highImpactRatio = (highImpact / data.criminaliteit.totaal) * 100;
     // 10% = 8.0 (laag aandeel), 20% = 6.0, 30% = 4.0 (hoog aandeel)
     const ratioScore = Math.max(1.0, Math.min(10.0, 8.0 - (highImpactRatio - 10) * 0.2));
     scores.push({ score: ratioScore, weight: 0.15 });
-    indicatoren.push({ naam: 'High-impact aandeel', waarde: Math.round(highImpactRatio), eenheid: '%', gemiddelde: 20, zScore: 0, gewicht: 0.15 });
+    indicatoren.push({ naam: 'High-impact aandeel', waarde: Math.round(highImpactRatio), eenheid: '%', gemiddelde: 20, zScore: 0, gewicht: 0.15, toelichting: 'Aandeel zware delicten (geweld, inbraak) in totaal. Lager is veiliger.' });
   }
 
   const totalWeight = scores.reduce((s, sc) => s + sc.weight, 0);
@@ -263,7 +283,7 @@ export function berekenVoorzieningenScore(
   const per1000 = (totaal / bevolking) * 1000;
   const voorzZ = zScore(per1000, benchmarks.voorzieningenPer1000.gemiddelde, benchmarks.voorzieningenPer1000.stdDev);
   scores.push({ score: zScoreToGrade(voorzZ), weight: 0.40 });
-  indicatoren.push({ naam: 'Per 1.000 inwoners', waarde: Math.round(per1000 * 10) / 10, eenheid: '', gemiddelde: benchmarks.voorzieningenPer1000.gemiddelde, zScore: Math.round(voorzZ * 100) / 100, gewicht: 0.40 });
+  indicatoren.push({ naam: 'Per 1.000 inwoners', waarde: Math.round(per1000 * 10) / 10, eenheid: '', gemiddelde: benchmarks.voorzieningenPer1000.gemiddelde, zScore: Math.round(voorzZ * 100) / 100, gewicht: 0.40, toelichting: 'Totaal aantal voorzieningen per 1.000 inwoners. Meer voorzieningen = hogere score.' });
 
   // 2. Essentiële dekking (huisarts, basisschool, supermarkt)
   const types = new Set(voorzieningen.map(v => v.type));
@@ -271,20 +291,23 @@ export function berekenVoorzieningenScore(
   const essentialCount = essentials.filter(e => types.has(e as VoorzieningType)).length;
   const essentialScore = essentialCount === 3 ? 8.5 : essentialCount === 2 ? 6.5 : essentialCount === 1 ? 4.5 : 2.0;
   scores.push({ score: essentialScore, weight: 0.35 });
-  indicatoren.push({ naam: 'Essentieel (3)', waarde: essentialCount, eenheid: 'van 3', gemiddelde: 3, zScore: 0, gewicht: 0.35 });
+  indicatoren.push({ naam: 'Essentieel (3)', waarde: essentialCount, eenheid: 'van 3', gemiddelde: 3, zScore: 0, gewicht: 0.35, toelichting: 'Zijn huisarts, basisschool en supermarkt aanwezig? Alle 3 aanwezig scoort het hoogst.' });
 
   // 3. Categoriediversiteit (9 mogelijke types)
   const uniqueTypes = types.size;
   const diversityScore = Math.max(1.0, Math.min(10.0, 1.0 + uniqueTypes));
   scores.push({ score: diversityScore, weight: 0.25 });
-  indicatoren.push({ naam: 'Categorieën', waarde: uniqueTypes, eenheid: 'van 9', gemiddelde: 6, zScore: 0, gewicht: 0.25 });
+  indicatoren.push({ naam: 'Categorieën', waarde: uniqueTypes, eenheid: 'van 9', gemiddelde: 6, zScore: 0, gewicht: 0.25, toelichting: 'Aantal soorten voorzieningen (winkels, scholen, zorg, etc.). Meer variatie = hogere score.' });
 
   const totalWeight = scores.reduce((s, sc) => s + sc.weight, 0);
   const finalScore = scores.reduce((s, sc) => s + sc.score * (sc.weight / totalWeight), 0);
 
-  return makeTabScore('Voorzieningen', finalScore, 0.12, indicatoren, {
-    confidence: totaal === 0 ? 'low' : 'high',
-  });
+  // Confidence: lage aantallen per 1000 wijzen op mogelijke onvolledige OSM data
+  const confidence = totaal === 0 ? 'low' as const
+    : per1000 < 3 ? 'medium' as const
+    : 'high' as const;
+
+  return makeTabScore('Voorzieningen', finalScore, 0.12, indicatoren, { confidence });
 }
 
 // --- 5. ZORG & WELZIJN ---
@@ -294,7 +317,7 @@ export function berekenZorgWelzijnScore(
   jeugdzorgWmo: GebiedData['jeugdzorgWmo'],
   benchmarks: BenchmarkSet,
 ): TabScore {
-  if (!zorgData) return makeTabScore('Zorg & Welzijn', null, 0.20, []);
+  if (!zorgData) return makeTabScore('Zorg & Welzijn', null, 0.18, []);
 
   const { eenzaamheid, mentaleGezondheid, zorgOndersteuning } = zorgData;
   const scores: { score: number; weight: number }[] = [];
@@ -304,58 +327,58 @@ export function berekenZorgWelzijnScore(
   if (eenzaamheid.totaal !== null) {
     const z = zScore(eenzaamheid.totaal, benchmarks.eenzaamheid.gemiddelde, benchmarks.eenzaamheid.stdDev);
     scores.push({ score: zScoreToGrade(-z), weight: 0.20 });
-    indicatoren.push({ naam: 'Eenzaamheid', waarde: eenzaamheid.totaal, eenheid: '%', gemiddelde: benchmarks.eenzaamheid.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.20 });
+    indicatoren.push({ naam: 'Eenzaamheid', waarde: eenzaamheid.totaal, eenheid: '%', gemiddelde: benchmarks.eenzaamheid.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.20, toelichting: 'Percentage inwoners dat zich eenzaam voelt. Lager dan gemiddeld scoort beter.' });
   }
 
   // 2. Ernstige eenzaamheid (lager = beter)
   if (eenzaamheid.ernstig !== null) {
     const z = zScore(eenzaamheid.ernstig, benchmarks.ernstigeEenzaamheid.gemiddelde, benchmarks.ernstigeEenzaamheid.stdDev);
     scores.push({ score: zScoreToGrade(-z), weight: 0.10 });
-    indicatoren.push({ naam: 'Ernstig eenzaam', waarde: eenzaamheid.ernstig, eenheid: '%', gemiddelde: benchmarks.ernstigeEenzaamheid.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.10 });
+    indicatoren.push({ naam: 'Ernstig eenzaam', waarde: eenzaamheid.ernstig, eenheid: '%', gemiddelde: benchmarks.ernstigeEenzaamheid.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.10, toelichting: 'Percentage ernstig of zeer ernstig eenzaam. Lager is beter.' });
   }
 
   // 3. Angst/depressie risico (lager = beter)
   if (mentaleGezondheid.angstDepressie !== null) {
     const z = zScore(mentaleGezondheid.angstDepressie, benchmarks.angstDepressie.gemiddelde, benchmarks.angstDepressie.stdDev);
     scores.push({ score: zScoreToGrade(-z), weight: 0.20 });
-    indicatoren.push({ naam: 'Angst/depressie', waarde: mentaleGezondheid.angstDepressie, eenheid: '%', gemiddelde: benchmarks.angstDepressie.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.20 });
+    indicatoren.push({ naam: 'Angst/depressie', waarde: mentaleGezondheid.angstDepressie, eenheid: '%', gemiddelde: benchmarks.angstDepressie.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.20, toelichting: 'Percentage met hoog risico op angst of depressie. Lager dan gemiddeld scoort beter.' });
   }
 
   // 4. Ervaren gezondheid (hoger = beter)
   if (zorgOndersteuning.ervarenGezondheid !== null) {
     const z = zScore(zorgOndersteuning.ervarenGezondheid, benchmarks.ervarenGezondheid.gemiddelde, benchmarks.ervarenGezondheid.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.15 });
-    indicatoren.push({ naam: 'Ervaren gezondheid', waarde: zorgOndersteuning.ervarenGezondheid, eenheid: '%', gemiddelde: benchmarks.ervarenGezondheid.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.15 });
+    indicatoren.push({ naam: 'Ervaren gezondheid', waarde: zorgOndersteuning.ervarenGezondheid, eenheid: '%', gemiddelde: benchmarks.ervarenGezondheid.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.15, toelichting: 'Percentage dat eigen gezondheid als goed of zeer goed beoordeelt. Hoger is beter.' });
   }
 
   // 5. Moeite met rondkomen (lager = beter)
   if (zorgOndersteuning.moeiteRondkomen !== null) {
     const z = zScore(zorgOndersteuning.moeiteRondkomen, benchmarks.moeiteRondkomen.gemiddelde, benchmarks.moeiteRondkomen.stdDev);
     scores.push({ score: zScoreToGrade(-z), weight: 0.15 });
-    indicatoren.push({ naam: 'Moeite rondkomen', waarde: zorgOndersteuning.moeiteRondkomen, eenheid: '%', gemiddelde: benchmarks.moeiteRondkomen.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.15 });
+    indicatoren.push({ naam: 'Moeite rondkomen', waarde: zorgOndersteuning.moeiteRondkomen, eenheid: '%', gemiddelde: benchmarks.moeiteRondkomen.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.15, toelichting: 'Percentage dat moeite heeft met rondkomen. Lager dan gemiddeld scoort beter.' });
   }
 
   // 6. Vrijwilligerswerk (hoger = beter)
   if (zorgOndersteuning.vrijwilligerswerk !== null) {
     const z = zScore(zorgOndersteuning.vrijwilligerswerk, benchmarks.vrijwilligerswerk.gemiddelde, benchmarks.vrijwilligerswerk.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.10 });
-    indicatoren.push({ naam: 'Vrijwilligerswerk', waarde: zorgOndersteuning.vrijwilligerswerk, eenheid: '%', gemiddelde: benchmarks.vrijwilligerswerk.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.10 });
+    indicatoren.push({ naam: 'Vrijwilligerswerk', waarde: zorgOndersteuning.vrijwilligerswerk, eenheid: '%', gemiddelde: benchmarks.vrijwilligerswerk.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.10, toelichting: 'Percentage inwoners dat vrijwilligerswerk doet. Meer betrokkenheid scoort hoger.' });
   }
 
   // 7. WMO per 1.000 (lager = beter)
   if (jeugdzorgWmo?.wmoPer1000 !== null && jeugdzorgWmo?.wmoPer1000 !== undefined) {
     const z = zScore(jeugdzorgWmo.wmoPer1000, benchmarks.wmoPer1000.gemiddelde, benchmarks.wmoPer1000.stdDev);
     scores.push({ score: zScoreToGrade(-z), weight: 0.10 });
-    indicatoren.push({ naam: 'WMO per 1.000', waarde: jeugdzorgWmo.wmoPer1000, eenheid: '', gemiddelde: benchmarks.wmoPer1000.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.10 });
+    indicatoren.push({ naam: 'WMO per 1.000', waarde: jeugdzorgWmo.wmoPer1000, eenheid: '', gemiddelde: benchmarks.wmoPer1000.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.10, toelichting: 'WMO-cliënten per 1.000 inwoners. Minder zorgbehoefte scoort hoger.' });
   }
 
-  if (scores.length === 0) return makeTabScore('Zorg & Welzijn', null, 0.20, []);
+  if (scores.length === 0) return makeTabScore('Zorg & Welzijn', null, 0.18, []);
 
   const confidence = scores.length >= 5 ? 'high' as const : scores.length >= 3 ? 'medium' as const : 'low' as const;
   const totalWeight = scores.reduce((s, sc) => s + sc.weight, 0);
   const finalScore = scores.reduce((s, sc) => s + sc.score * (sc.weight / totalWeight), 0);
 
-  return makeTabScore('Zorg & Welzijn', finalScore, 0.20, indicatoren, { confidence });
+  return makeTabScore('Zorg & Welzijn', finalScore, 0.18, indicatoren, { confidence });
 }
 
 // --- 6. WERK & INKOMEN ---
@@ -370,28 +393,28 @@ export function berekenWerkInkomenScore(data: GebiedData, benchmarks: BenchmarkS
   if (inkomen.gemiddeld !== null) {
     const z = zScore(inkomen.gemiddeld, benchmarks.gemiddeldInkomen.gemiddelde, benchmarks.gemiddeldInkomen.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.25 });
-    indicatoren.push({ naam: 'Gem. inkomen', waarde: inkomen.gemiddeld, eenheid: '€', gemiddelde: benchmarks.gemiddeldInkomen.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.25 });
+    indicatoren.push({ naam: 'Gem. inkomen', waarde: inkomen.gemiddeld, eenheid: '€', gemiddelde: benchmarks.gemiddeldInkomen.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.25, toelichting: 'Gemiddeld besteedbaar inkomen per persoon. Hoger dan gemiddeld scoort beter.' });
   }
 
-  // 2. Laag inkomen % (lager = beter)
-  if (inkomen.laagInkomenPercentage > 0) {
+  // 2. Laag inkomen % (lager = beter) — CBS quintiel: landelijk gem = 40%
+  if (inkomen.laagInkomenPercentage !== null && inkomen.laagInkomenPercentage > 0) {
     const z = zScore(inkomen.laagInkomenPercentage, benchmarks.laagInkomen.gemiddelde, benchmarks.laagInkomen.stdDev);
     scores.push({ score: zScoreToGrade(-z), weight: 0.15 });
-    indicatoren.push({ naam: 'Laag inkomen', waarde: inkomen.laagInkomenPercentage, eenheid: '%', gemiddelde: benchmarks.laagInkomen.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.15 });
+    indicatoren.push({ naam: 'Laag inkomen', waarde: inkomen.laagInkomenPercentage, eenheid: '%', gemiddelde: benchmarks.laagInkomen.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.15, toelichting: 'Percentage inwoners met een relatief laag inkomen (CBS: onderste 40% landelijk). Lager dan gemiddeld scoort beter.' });
   }
 
-  // 3. Hoog inkomen % (hoger = beter)
-  if (inkomen.hoogInkomenPercentage > 0) {
+  // 3. Hoog inkomen % (hoger = beter) — CBS quintiel: landelijk gem = 20%
+  if (inkomen.hoogInkomenPercentage !== null && inkomen.hoogInkomenPercentage > 0) {
     const z = zScore(inkomen.hoogInkomenPercentage, benchmarks.hoogInkomen.gemiddelde, benchmarks.hoogInkomen.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.10 });
-    indicatoren.push({ naam: 'Hoog inkomen', waarde: inkomen.hoogInkomenPercentage, eenheid: '%', gemiddelde: benchmarks.hoogInkomen.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.10 });
+    indicatoren.push({ naam: 'Hoog inkomen', waarde: inkomen.hoogInkomenPercentage, eenheid: '%', gemiddelde: benchmarks.hoogInkomen.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.10, toelichting: 'Percentage inwoners met een relatief hoog inkomen (CBS: bovenste 20% landelijk). Hoger scoort beter.' });
   }
 
   // 4. Arbeidsparticipatie (hoger = beter)
   if (werkInkomen?.werkgelegenheid.arbeidsparticipatie !== null && werkInkomen?.werkgelegenheid.arbeidsparticipatie !== undefined) {
     const z = zScore(werkInkomen.werkgelegenheid.arbeidsparticipatie, benchmarks.arbeidsparticipatie.gemiddelde, benchmarks.arbeidsparticipatie.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.20 });
-    indicatoren.push({ naam: 'Arbeidsparticipatie', waarde: werkInkomen.werkgelegenheid.arbeidsparticipatie, eenheid: '%', gemiddelde: benchmarks.arbeidsparticipatie.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.20 });
+    indicatoren.push({ naam: 'Arbeidsparticipatie', waarde: werkInkomen.werkgelegenheid.arbeidsparticipatie, eenheid: '%', gemiddelde: benchmarks.arbeidsparticipatie.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.20, toelichting: 'Percentage beroepsbevolking dat werkt. Hoger dan gemiddeld scoort beter.' });
     if (werkInkomen.werkgelegenheidIsGemeenteData) isGemeenteData = true;
   }
 
@@ -399,7 +422,7 @@ export function berekenWerkInkomenScore(data: GebiedData, benchmarks: BenchmarkS
   if (werkInkomen?.opleiding.hoog !== null && werkInkomen?.opleiding.hoog !== undefined) {
     const z = zScore(werkInkomen.opleiding.hoog, benchmarks.opleidingHoog.gemiddelde, benchmarks.opleidingHoog.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.15 });
-    indicatoren.push({ naam: 'Hoog opgeleid', waarde: werkInkomen.opleiding.hoog, eenheid: '%', gemiddelde: benchmarks.opleidingHoog.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.15 });
+    indicatoren.push({ naam: 'Hoog opgeleid', waarde: werkInkomen.opleiding.hoog, eenheid: '%', gemiddelde: benchmarks.opleidingHoog.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.15, toelichting: 'Percentage met HBO of WO opleiding. Hoger opleidingsniveau scoort beter.' });
     if (werkInkomen.opleidingIsGemeenteData) isGemeenteData = true;
   }
 
@@ -407,7 +430,7 @@ export function berekenWerkInkomenScore(data: GebiedData, benchmarks: BenchmarkS
   if (werkInkomen?.uitkeringen.bijstandPer1000 !== null && werkInkomen?.uitkeringen.bijstandPer1000 !== undefined) {
     const z = zScore(werkInkomen.uitkeringen.bijstandPer1000, benchmarks.bijstandPer1000.gemiddelde, benchmarks.bijstandPer1000.stdDev);
     scores.push({ score: zScoreToGrade(-z), weight: 0.15 });
-    indicatoren.push({ naam: 'Bijstand per 1.000', waarde: werkInkomen.uitkeringen.bijstandPer1000, eenheid: '', gemiddelde: benchmarks.bijstandPer1000.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.15 });
+    indicatoren.push({ naam: 'Bijstand per 1.000', waarde: werkInkomen.uitkeringen.bijstandPer1000, eenheid: '', gemiddelde: benchmarks.bijstandPer1000.gemiddelde, zScore: Math.round(-z * 100) / 100, gewicht: 0.15, toelichting: 'Aantal bijstandsontvangers per 1.000 inwoners. Minder bijstand scoort hoger.' });
   }
 
   if (scores.length === 0) return makeTabScore('Werk & Inkomen', null, 0.15, []);
@@ -422,7 +445,7 @@ export function berekenWerkInkomenScore(data: GebiedData, benchmarks: BenchmarkS
 // --- 7. LEEFOMGEVING ---
 
 export function berekenLeefomgevingScore(leefomgevingData: LeefomgevingData | null, benchmarks: BenchmarkSet): TabScore {
-  if (!leefomgevingData) return makeTabScore('Leefomgeving', null, 0.10, []);
+  if (!leefomgevingData) return makeTabScore('Leefomgeving', null, 0.12, []);
 
   const { metrics, bodemgebruik } = leefomgevingData;
   const scores: { score: number; weight: number }[] = [];
@@ -434,14 +457,14 @@ export function berekenLeefomgevingScore(leefomgevingData: LeefomgevingData | nu
     const logBenchmark = Math.log10(Math.max(benchmarks.m2GroenPerPersoon.gemiddelde, 1));
     const z = zScore(logValue, logBenchmark, benchmarks.m2GroenPerPersoon.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.50 });
-    indicatoren.push({ naam: 'm² groen/persoon', waarde: Math.round(metrics.m2GroenPerPersoon), eenheid: 'm²', gemiddelde: benchmarks.m2GroenPerPersoon.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.50 });
+    indicatoren.push({ naam: 'm² groen/persoon', waarde: Math.round(metrics.m2GroenPerPersoon), eenheid: 'm²', gemiddelde: benchmarks.m2GroenPerPersoon.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.50, toelichting: 'Vierkante meters groen per inwoner. Meer groen per persoon scoort hoger.' });
   }
 
   // 2. Groenpercentage (hoger = beter)
   if (metrics.groenPercentage !== null) {
     const z = zScore(metrics.groenPercentage, benchmarks.groenPercentage.gemiddelde, benchmarks.groenPercentage.stdDev);
     scores.push({ score: zScoreToGrade(z), weight: 0.30 });
-    indicatoren.push({ naam: 'Groenpercentage', waarde: Math.round(metrics.groenPercentage * 10) / 10, eenheid: '%', gemiddelde: benchmarks.groenPercentage.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.30 });
+    indicatoren.push({ naam: 'Groenpercentage', waarde: Math.round(metrics.groenPercentage * 10) / 10, eenheid: '%', gemiddelde: benchmarks.groenPercentage.gemiddelde, zScore: Math.round(z * 100) / 100, gewicht: 0.30, toelichting: 'Percentage van het oppervlak dat groen is. Hoger dan gemiddeld scoort beter.' });
   }
 
   // 3. Groentypediversiteit (entropy van 4 types)
@@ -456,15 +479,15 @@ export function berekenLeefomgevingScore(leefomgevingData: LeefomgevingData | nu
     const greenEntropy = shannonEntropy(greenTypes);
     const diversityScore = entropyToGrade(greenEntropy);
     scores.push({ score: diversityScore, weight: 0.20 });
-    indicatoren.push({ naam: 'Groendiversiteit', waarde: Math.round(greenEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0, zScore: 0, gewicht: 0.20 });
+    indicatoren.push({ naam: 'Groendiversiteit', waarde: Math.round(greenEntropy * 100) / 100, eenheid: 'entropy', gemiddelde: 0, zScore: 0, gewicht: 0.20, toelichting: 'Variatie in soorten groen (parken, sport, natuur, recreatie). Meer variatie scoort hoger.' });
   }
 
-  if (scores.length === 0) return makeTabScore('Leefomgeving', null, 0.10, []);
+  if (scores.length === 0) return makeTabScore('Leefomgeving', null, 0.12, []);
 
   const totalWeight = scores.reduce((s, sc) => s + sc.weight, 0);
   const finalScore = scores.reduce((s, sc) => s + sc.score * (sc.weight / totalWeight), 0);
 
-  return makeTabScore('Leefomgeving', finalScore, 0.10, indicatoren, {
+  return makeTabScore('Leefomgeving', finalScore, 0.12, indicatoren, {
     isGemeenteData: leefomgevingData.isGemeenteNiveau ?? false,
   });
 }
@@ -473,11 +496,11 @@ export function berekenLeefomgevingScore(leefomgevingData: LeefomgevingData | nu
 
 const TAB_WEIGHTS: Record<string, number> = {
   veiligheid: 0.20,
-  zorgWelzijn: 0.20,
+  zorgWelzijn: 0.18,
   werkInkomen: 0.15,
   wonen: 0.15,
   voorzieningen: 0.12,
-  leefomgeving: 0.10,
+  leefomgeving: 0.12,
   bewoners: 0.08,
 };
 

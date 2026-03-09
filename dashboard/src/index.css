@@ -126,16 +126,28 @@ body {
   }
 }
 
-/* Sub tabs mobile - horizontaal scrollen */
+/* Sub tabs mobile - horizontaal scrollen + controls op eigen regel */
 @media (max-width: 768px) {
   .sub-tabs {
     margin: 0 -16px;
-    padding: 0 16px;
+    padding: 0;
   }
 
-  .sub-tabs button {
+  .sub-tabs-scroll {
+    padding: 0 12px;
+  }
+
+  .sub-tabs-scroll button {
     padding: 10px 12px !important;
     font-size: 12px !important;
+  }
+
+  .sub-tabs-controls-desktop {
+    display: none !important;
+  }
+
+  .sub-tabs-controls-mobile {
+    display: flex !important;
   }
 }
 

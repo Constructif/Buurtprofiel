@@ -36,7 +36,7 @@ function getKpiColor(value: number | null, nlWaarde: number): string {
 const PIE_COLORS = ['#22c55e', '#84cc16', '#34d399', '#10b981', '#059669'];
 
 export function Leefomgeving() {
-  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData, selectedJaar } = useGebiedStore();
   const [leefomgevingData, setLeefomgevingData] = useState<LeefomgevingData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +60,8 @@ export function Leefomgeving() {
           selectedGebied.wijkCode,
           selectedGebied.wijkNaam,
           selectedGebied.gemeenteCode,
-          selectedGebied.gemeenteNaam
+          selectedGebied.gemeenteNaam,
+          selectedJaar,
         );
 
         setLeefomgevingData(data);
@@ -76,7 +77,7 @@ export function Leefomgeving() {
     };
 
     loadData();
-  }, [selectedGebied, gebiedData]);
+  }, [selectedGebied, gebiedData, selectedJaar]);
 
   // No selection state
   if (!selectedGebied) {

@@ -4,6 +4,7 @@ import type { ZorgWelzijnData } from '../types/zorgWelzijn';
 import type { LeefomgevingData } from '../types/leefomgeving';
 
 // NL benchmarks - hardcoded landelijke gemiddelden en standaarddeviaties
+// Bronnen: CBS StatLine (85039NED/85984NED), RIVM Gezondheidsmonitor, CBS 86211NED
 export const NL_BENCHMARKS: BenchmarkSet = {
   type: 'nederland',
   naam: 'Nederland',
@@ -17,7 +18,7 @@ export const NL_BENCHMARKS: BenchmarkSet = {
   gewogenMisdrijvenPer1000: { gemiddelde: 60, stdDev: 30 },
   // Voorzieningen
   voorzieningenPer1000: { gemiddelde: 8, stdDev: 4 },
-  // Zorg & Welzijn
+  // Zorg & Welzijn (bron: RIVM GGD Gezondheidsmonitor 2022)
   eenzaamheid: { gemiddelde: 49.2, stdDev: 12 },
   ernstigeEenzaamheid: { gemiddelde: 14.4, stdDev: 5 },
   angstDepressie: { gemiddelde: 10.2, stdDev: 4 },
@@ -25,15 +26,17 @@ export const NL_BENCHMARKS: BenchmarkSet = {
   moeiteRondkomen: { gemiddelde: 20.5, stdDev: 8 },
   vrijwilligerswerk: { gemiddelde: 23.8, stdDev: 8 },
   wmoPer1000: { gemiddelde: 60, stdDev: 25 },
-  // Werk & Inkomen
+  // Werk & Inkomen (bron: CBS Kerncijfers)
   gemiddeldInkomen: { gemiddelde: 37200, stdDev: 8000 },
-  laagInkomen: { gemiddelde: 40, stdDev: 10 },
+  // CBS quintiel-definities: laagInkomen = % personen in landelijke onderste 40%, hoogInkomen = bovenste 20%
+  // Landelijk gemiddelde is per definitie ~40% resp. ~20% (het is een quintiel-verdeling)
+  laagInkomen: { gemiddelde: 40, stdDev: 8 },   // stdDev 8: striktere differentiatie tussen buurten
   hoogInkomen: { gemiddelde: 20, stdDev: 8 },
   arbeidsparticipatie: { gemiddelde: 71, stdDev: 8 },
   opleidingHoog: { gemiddelde: 32.5, stdDev: 10 },
   bijstandPer1000: { gemiddelde: 23, stdDev: 12 },
-  // Leefomgeving
-  m2GroenPerPersoon: { gemiddelde: 418, stdDev: 0.5 }, // log-schaal
+  // Leefomgeving (bron: CBS 86211NED bodemgebruik + bevolking)
+  m2GroenPerPersoon: { gemiddelde: 418, stdDev: 0.5 }, // log-schaal: stdDev in log10 eenheden
   groenPercentage: { gemiddelde: 18.1, stdDev: 10 },
 };
 
@@ -83,10 +86,10 @@ export function getGemeenteBenchmarks(
   if (gemeenteData.inkomen.gemiddeld !== null) {
     benchmarks.gemiddeldInkomen = { gemiddelde: gemeenteData.inkomen.gemiddeld, stdDev: NL_BENCHMARKS.gemiddeldInkomen.stdDev };
   }
-  if (gemeenteData.inkomen.laagInkomenPercentage > 0) {
+  if (gemeenteData.inkomen.laagInkomenPercentage !== null && gemeenteData.inkomen.laagInkomenPercentage > 0) {
     benchmarks.laagInkomen = { gemiddelde: gemeenteData.inkomen.laagInkomenPercentage, stdDev: NL_BENCHMARKS.laagInkomen.stdDev };
   }
-  if (gemeenteData.inkomen.hoogInkomenPercentage > 0) {
+  if (gemeenteData.inkomen.hoogInkomenPercentage !== null && gemeenteData.inkomen.hoogInkomenPercentage > 0) {
     benchmarks.hoogInkomen = { gemiddelde: gemeenteData.inkomen.hoogInkomenPercentage, stdDev: NL_BENCHMARKS.hoogInkomen.stdDev };
   }
   if (gemeenteData.werkInkomen?.werkgelegenheid.arbeidsparticipatie !== null && gemeenteData.werkInkomen?.werkgelegenheid.arbeidsparticipatie !== undefined) {
@@ -104,6 +107,21 @@ export function getGemeenteBenchmarks(
     const gem = zorgData.vergelijking.gemeente;
     if (gem.eenzaam !== null) {
       benchmarks.eenzaamheid = { gemiddelde: gem.eenzaam, stdDev: NL_BENCHMARKS.eenzaamheid.stdDev };
+    }
+    if (gem.ernstigEenzaam !== null) {
+      benchmarks.ernstigeEenzaamheid = { gemiddelde: gem.ernstigEenzaam, stdDev: NL_BENCHMARKS.ernstigeEenzaamheid.stdDev };
+    }
+    if (gem.angstDepressie !== null) {
+      benchmarks.angstDepressie = { gemiddelde: gem.angstDepressie, stdDev: NL_BENCHMARKS.angstDepressie.stdDev };
+    }
+    if (gem.ervarenGezondheid !== null) {
+      benchmarks.ervarenGezondheid = { gemiddelde: gem.ervarenGezondheid, stdDev: NL_BENCHMARKS.ervarenGezondheid.stdDev };
+    }
+    if (gem.moeiteRondkomen !== null) {
+      benchmarks.moeiteRondkomen = { gemiddelde: gem.moeiteRondkomen, stdDev: NL_BENCHMARKS.moeiteRondkomen.stdDev };
+    }
+    if (gem.vrijwilligerswerk !== null) {
+      benchmarks.vrijwilligerswerk = { gemiddelde: gem.vrijwilligerswerk, stdDev: NL_BENCHMARKS.vrijwilligerswerk.stdDev };
     }
   }
 

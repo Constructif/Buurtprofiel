@@ -40,6 +40,11 @@ export interface ZorgTrend {
 export interface ZorgVergelijkingNiveau {
   naam: string;
   eenzaam: number | null;
+  ernstigEenzaam: number | null;
+  angstDepressie: number | null;
+  ervarenGezondheid: number | null;
+  moeiteRondkomen: number | null;
+  vrijwilligerswerk: number | null;
 }
 
 export interface ZorgVergelijking {

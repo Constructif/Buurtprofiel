@@ -1,8 +1,11 @@
 import { useGebiedStore } from '../../store/gebiedStore';
+import { useAuthStore } from '../../store/authStore';
+import { supabase } from '../../services/supabase';
 import { GebiedSearch } from '../search/GebiedSearch';
 
 export function Header() {
   const { selectedGebied, clearSelectedGebied } = useGebiedStore();
+  const user = useAuthStore((s) => s.user);
 
   return (
     <header style={{ backgroundColor: '#eb6608', color: 'white', position: 'sticky', top: 0, zIndex: 50 }}>
@@ -29,8 +32,8 @@ export function Header() {
             </h1>
           </div>
 
-          {/* Selected area info - rechts */}
-          <div className="header-selected" style={{ width: '320px', flexShrink: 0, display: 'flex', justifyContent: 'flex-end' }}>
+          {/* Selected area info + user - rechts */}
+          <div className="header-selected" style={{ width: '320px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
             {selectedGebied && (
               <div style={{
                 display: 'flex',
@@ -77,6 +80,26 @@ export function Header() {
                 </button>
               </div>
             )}
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
+              <button
+                onClick={() => supabase.auth.signOut()}
+                style={{
+                  background: 'none',
+                  border: '1px solid rgba(255,255,255,0.3)',
+                  color: 'white',
+                  cursor: 'pointer',
+                  padding: '6px 12px',
+                  fontSize: '12px',
+                }}
+              >
+                Uitloggen
+              </button>
+              {user?.email && (
+                <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)' }}>
+                  {user.email}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </div>

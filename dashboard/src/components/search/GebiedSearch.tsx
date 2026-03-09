@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGebiedStore } from '../../store/gebiedStore';
-import { loadAllGebieden, fetchCBSData, fetchCriminaliteitTrend, fetchVeiligheidsVergelijking, fetchVerhuisbewegingen, fetchHerkomstLandData } from '../../services/cbs';
+import { loadAllGebieden, loadGebiedData } from '../../services/cbs';
 import type { Gebied } from '../../types/gebied';
 
 export function GebiedSearch() {
@@ -20,6 +20,9 @@ export function GebiedSearch() {
     setIsLoadingGebieden,
     setIsLoadingData,
     prefetchVoorzieningen,
+    selectedJaar,
+    selectedGemeenteFilter,
+    setSelectedGemeenteFilter,
   } = useGebiedStore();
 
   // Laad gebieden bij eerste render
@@ -50,8 +53,19 @@ export function GebiedSearch() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Basis gebieden voor counts (rekening houdend met gemeente filter)
+  const baseGebieden = selectedGemeenteFilter
+    ? allGebieden.filter(g => g.gemeenteCode === selectedGemeenteFilter.code || g.code === selectedGemeenteFilter.code)
+    : allGebieden;
+
   // Filter results
   const filtered = allGebieden.filter((g) => {
+    // Gemeente filter (drill-down)
+    if (selectedGemeenteFilter) {
+      if (g.type === 'gemeente') return false; // Verberg gemeenten wanneer er al een gemeente filter actief is
+      if (g.gemeenteCode !== selectedGemeenteFilter.code) return false;
+    }
+
     // Type filter
     if (g.type === 'buurt' && !filters.buurt) return false;
     if (g.type === 'wijk' && !filters.wijk) return false;
@@ -66,66 +80,49 @@ export function GebiedSearch() {
   });
 
   const counts = {
-    buurt: allGebieden.filter((g) => g.type === 'buurt').length,
-    wijk: allGebieden.filter((g) => g.type === 'wijk').length,
-    gemeente: allGebieden.filter((g) => g.type === 'gemeente').length,
+    buurt: baseGebieden.filter((g) => g.type === 'buurt').length,
+    wijk: baseGebieden.filter((g) => g.type === 'wijk').length,
+    gemeente: selectedGemeenteFilter ? 0 : allGebieden.filter((g) => g.type === 'gemeente').length,
   };
 
   async function handleSelect(gebied: Gebied) {
+    // Klik op gemeente = filter instellen + data laden
+    if (gebied.type === 'gemeente' && !selectedGemeenteFilter) {
+      setSelectedGemeenteFilter(gebied);
+      setQuery('');
+
+      // Laad ook gemeente data op de achtergrond
+      setSelectedGebied(gebied);
+      setIsLoadingData(true);
+      try {
+        const { gebiedData, gemeenteData } = await loadGebiedData(gebied, selectedJaar);
+        setGebiedData(gebiedData);
+        setGemeenteData(gemeenteData);
+        prefetchVoorzieningen(gebied.code);
+      } catch (error) {
+        console.error('Fout bij laden data:', error);
+      } finally {
+        setIsLoadingData(false);
+      }
+
+      // Dropdown open houden zodat gebruiker wijken/buurten kan bekijken
+      setTimeout(() => inputRef.current?.focus(), 100);
+      return;
+    }
+
+    // Klik op wijk/buurt (of gemeente wanneer al gefilterd) = normaal selecteren
     setSelectedGebied(gebied);
     setIsOpen(false);
     setQuery('');
+    setSelectedGemeenteFilter(null);
 
-    // Laad data voor dit gebied
     setIsLoadingData(true);
     try {
-      // Bepaal gemeentecode voor verhuisbewegingen
-      const gemeenteCode = gebied.type === 'gemeente'
-        ? gebied.code
-        : gebied.gemeenteCode;
-
-      // Laad ALLE data parallel, inclusief voorzieningen en gemeente-data voor benchmark
-      const gemeenteGebied: Gebied = {
-        code: gemeenteCode || gebied.code,
-        naam: gebied.gemeenteNaam || gebied.naam,
-        type: 'gemeente',
-      };
-      const [data, trendData, bevolkingsDynamiek, herkomstLandGemeente, gemeenteResult] = await Promise.all([
-        fetchCBSData(gebied.code, gebied.naam, gebied),
-        fetchCriminaliteitTrend(gebied.code),
-        gemeenteCode ? fetchVerhuisbewegingen(gemeenteCode) : Promise.resolve({ jaren: [] }),
-        gemeenteCode ? fetchHerkomstLandData(gemeenteCode) : Promise.resolve({ totaal: 0, landen: [] }),
-        // Gemeente-level data ophalen voor benchmark vergelijking
-        (gebied.type !== 'gemeente' && gemeenteCode)
-          ? fetchCBSData(gemeenteCode, gebied.gemeenteNaam || '', gemeenteGebied)
-          : Promise.resolve(null),
-      ]);
+      const { gebiedData, gemeenteData } = await loadGebiedData(gebied, selectedJaar);
+      setGebiedData(gebiedData);
+      setGemeenteData(gemeenteData);
       // Start voorzieningen prefetch parallel (fire-and-forget)
       prefetchVoorzieningen(gebied.code);
-
-      // Haal veiligheidsvergelijking op met gewogen parameters
-      const veiligheidsVergelijking = await fetchVeiligheidsVergelijking(
-        gebied,
-        data.bevolking.totaal,
-        data.criminaliteit.totaal,
-        data.criminaliteit.geweld,
-        data.criminaliteit.inbraakWoningen,
-        data.criminaliteit.vermogen,
-        data.criminaliteit.vernieling
-      );
-
-      // Combineer alle data
-      setGebiedData({
-        ...data,
-        criminaliteitTrend: trendData,
-        veiligheidsVergelijking,
-        bevolkingsDynamiek,
-        herkomstLandGemeente: herkomstLandGemeente.landen.length > 0 ? herkomstLandGemeente : undefined,
-        gemeenteNaam: gebied.gemeenteNaam || gebied.naam,
-      });
-
-      // Sla gemeente-data op voor benchmark vergelijking
-      setGemeenteData(gemeenteResult);
     } catch (error) {
       console.error('Fout bij laden data:', error);
     } finally {
@@ -183,13 +180,49 @@ export function GebiedSearch() {
           }}
         >
           <div className="search-dropdown-content" style={{ padding: '16px' }}>
+            {/* Gemeente filter chip */}
+            {selectedGemeenteFilter && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                marginBottom: '12px',
+                padding: '8px 12px',
+                backgroundColor: '#fef3ee',
+                border: '1px solid #eb6608',
+              }}>
+                <span style={{ fontSize: '13px', color: '#374151' }}>
+                  Gemeente: <strong style={{ color: '#eb6608' }}>{selectedGemeenteFilter.naam}</strong>
+                </span>
+                <button
+                  onClick={() => {
+                    setSelectedGemeenteFilter(null);
+                    setQuery('');
+                  }}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    color: '#6b7280',
+                    fontSize: '16px',
+                    padding: '0 4px',
+                    lineHeight: 1,
+                  }}
+                  title="Filter wissen"
+                >
+                  ✕
+                </button>
+              </div>
+            )}
+
             {/* Search input */}
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Type een naam of code..."
+              placeholder={selectedGemeenteFilter ? `Zoek binnen ${selectedGemeenteFilter.naam}...` : 'Type een naam of code...'}
               style={{
                 width: '100%',
                 padding: '10px 16px',
@@ -204,7 +237,15 @@ export function GebiedSearch() {
             {/* Type filters */}
             <div className="search-filters" style={{ display: 'flex', gap: '16px', marginTop: '12px', paddingBottom: '12px', borderBottom: '1px solid #e5e7eb' }}>
               {(['buurt', 'wijk', 'gemeente'] as const).map((type) => (
-                <label key={type} style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                <label
+                  key={type}
+                  style={{
+                    display: selectedGemeenteFilter && type === 'gemeente' ? 'none' : 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    cursor: 'pointer',
+                  }}
+                >
                   <input
                     type="checkbox"
                     checked={filters[type]}
@@ -249,7 +290,10 @@ export function GebiedSearch() {
                 >
                   <p style={{ fontWeight: 500, color: '#111827', margin: 0 }}>{g.naam}</p>
                   <p style={{ fontSize: '12px', color: '#6b7280', margin: 0 }}>
-                    {g.type === 'gemeente' ? 'Gemeente' : g.type === 'wijk' ? `Wijk in ${g.gemeenteNaam || 'onbekend'}` : `Buurt in ${g.gemeenteNaam || 'onbekend'}`}
+                    {selectedGemeenteFilter
+                      ? (g.type === 'wijk' ? 'Wijk' : `Buurt${g.wijkNaam ? ` in wijk ${g.wijkNaam}` : ''}`)
+                      : (g.type === 'gemeente' ? 'Gemeente' : g.type === 'wijk' ? `Wijk in ${g.gemeenteNaam || 'onbekend'}` : `Buurt in ${g.gemeenteNaam || 'onbekend'}`)
+                    }
                   </p>
                 </button>
               ))}

@@ -2,156 +2,62 @@ import type {
   ZorgWelzijnData,
   ZorgTrend,
   ZorgVergelijking,
-  RIVMRawData
+  ZorgVergelijkingNiveau,
 } from '../types/zorgWelzijn';
-
-const RIVM_BASE = 'https://dataderden.cbs.nl/ODataApi/OData/50120NED';
-
-// Alle velden die we ophalen
-const RIVM_FIELDS = [
-  'WijkenEnBuurten',
-  'Gemeentenaam_1',
-  'SoortRegio_2',
-  'Codering_3',
-  'Perioden',
-  // Eenzaamheid
-  'Eenzaam_27',
-  'ErnstigZeerErnstigEenzaam_28',
-  'EmotioneelEenzaam_29',
-  'SociaalEenzaam_30',
-  // Mentale gezondheid
-  'HoogRisicoOpAngstOfDepressie_25',
-  'PsychischeKlachten_20',
-  'HeelVeelStressInAfgelopen4Weken_26',
-  'MistEmotioneleSteun_23',
-  'ZeerLageVeerkracht_21',
-  // Zorg & Ondersteuning
-  'Mantelzorger_31',
-  'Vrijwilligerswerk_32',
-  'ErvarenGezondheidGoedZeerGoed_4',
-  'EenOfMeerLangdurigeAandoeningen_16',
-  'BeperktVanwegeGezondheid_17',
-  'MoeiteMetRondkomen_33'
-];
-
-// Cache voor RIVM data
-const rivmCache = new Map<string, { data: RIVMRawData; timestamp: number }>();
-const CACHE_TTL = 30 * 60 * 1000; // 30 minuten
+import { supabase } from './supabase';
 
 /**
- * Fetch RIVM data voor een specifieke regio
+ * Fetch RIVM zorg/welzijn data voor een specifieke regio uit Supabase
  */
-export async function fetchRIVMData(
-  regioCode: string,
-  periode: string = '2022JJ00'
-): Promise<RIVMRawData | null> {
-  const cacheKey = `${regioCode}_${periode}`;
-  const cached = rivmCache.get(cacheKey);
-
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
+async function fetchRIVMFromSupabase(code: string, jaar?: number) {
+  if (jaar) {
+    // Probeer exact jaar eerst
+    const { data } = await supabase
+      .from('rivm_gezondheid')
+      .select('*')
+      .eq('code', code)
+      .eq('jaar', jaar)
+      .maybeSingle();
+    if (data) return data;
   }
 
-  const filter = [
-    `startswith(WijkenEnBuurten,'${regioCode}')`,
-    `Perioden eq '${periode}'`,
-    `Leeftijd eq '20300'`,  // 18+
-    `Marges eq 'MW00000'`   // Waarde (geen marge)
-  ].join(' and ');
+  // Fallback: meest recente jaar (of als geen jaar opgegeven)
+  const { data, error } = await supabase
+    .from('rivm_gezondheid')
+    .select('*')
+    .eq('code', code)
+    .order('jaar', { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  const params = new URLSearchParams({
-    '$filter': filter,
-    '$select': RIVM_FIELDS.join(',')
-  });
-
-  try {
-    const response = await fetch(`${RIVM_BASE}/TypedDataSet?${params}`);
-    if (!response.ok) {
-      console.warn(`RIVM API error: ${response.status}`);
-      return null;
-    }
-
-    const json = await response.json();
-    const data = json.value?.[0] as RIVMRawData | undefined;
-
-    if (data) {
-      rivmCache.set(cacheKey, { data, timestamp: Date.now() });
-    }
-
-    return data || null;
-  } catch (error) {
-    console.error('RIVM fetch error:', error);
-    return null;
-  }
+  if (error || !data) return null;
+  return data;
 }
 
 /**
  * Fetch trend data (alle jaren) voor een regio
  */
 export async function fetchRIVMTrendData(regioCode: string): Promise<ZorgTrend> {
-  const filter = [
-    `startswith(WijkenEnBuurten,'${regioCode}')`,
-    `Leeftijd eq '20300'`,
-    `Marges eq 'MW00000'`
-  ].join(' and ');
-
-  const params = new URLSearchParams({
-    '$filter': filter,
-    '$select': 'Perioden,Eenzaam_27,ErnstigZeerErnstigEenzaam_28,HoogRisicoOpAngstOfDepressie_25'
-  });
-
   try {
-    const response = await fetch(`${RIVM_BASE}/TypedDataSet?${params}`);
-    if (!response.ok) return { jaren: [] };
+    const { data, error } = await supabase
+      .from('rivm_gezondheid')
+      .select('jaar, eenzaamheid, mentale_gezondheid')
+      .eq('code', regioCode)
+      .order('jaar');
 
-    const json = await response.json();
-    const values = json.value || [];
+    if (error || !data) return { jaren: [] };
 
-    const jaren = values
-      .map((item: { Perioden?: string; Eenzaam_27?: number | null; ErnstigZeerErnstigEenzaam_28?: number | null; HoogRisicoOpAngstOfDepressie_25?: number | null }) => ({
-        jaar: parseInt(item.Perioden?.substring(0, 4) || '0', 10),
-        eenzaam: item.Eenzaam_27 ?? null,
-        ernstigEenzaam: item.ErnstigZeerErnstigEenzaam_28 ?? null,
-        angstDepressie: item.HoogRisicoOpAngstOfDepressie_25 ?? null
-      }))
-      .filter((j: { jaar: number }) => j.jaar > 0)
-      .sort((a: { jaar: number }, b: { jaar: number }) => a.jaar - b.jaar);
+    const jaren = data.map((row) => ({
+      jaar: row.jaar,
+      eenzaam: row.eenzaamheid?.totaal ?? null,
+      ernstigEenzaam: row.eenzaamheid?.ernstig ?? null,
+      angstDepressie: row.mentale_gezondheid?.angstDepressie ?? null,
+    }));
 
     return { jaren };
-  } catch (error) {
-    console.error('RIVM trend fetch error:', error);
+  } catch {
     return { jaren: [] };
   }
-}
-
-/**
- * Process raw RIVM data naar ZorgWelzijnData format
- */
-function processRIVMData(rawData: RIVMRawData): Omit<ZorgWelzijnData, 'trend' | 'vergelijking'> {
-  return {
-    eenzaamheid: {
-      totaal: rawData.Eenzaam_27,
-      ernstig: rawData.ErnstigZeerErnstigEenzaam_28,
-      emotioneel: rawData.EmotioneelEenzaam_29,
-      sociaal: rawData.SociaalEenzaam_30
-    },
-    mentaleGezondheid: {
-      angstDepressie: rawData.HoogRisicoOpAngstOfDepressie_25,
-      psychischeKlachten: rawData.PsychischeKlachten_20,
-      stress: rawData.HeelVeelStressInAfgelopen4Weken_26,
-      emotioneleSteun: rawData.MistEmotioneleSteun_23,
-      veerkracht: rawData.ZeerLageVeerkracht_21
-    },
-    zorgOndersteuning: {
-      mantelzorger: rawData.Mantelzorger_31,
-      vrijwilligerswerk: rawData.Vrijwilligerswerk_32,
-      ervarenGezondheid: rawData.ErvarenGezondheidGoedZeerGoed_4,
-      langdurigeAandoeningen: rawData.EenOfMeerLangdurigeAandoeningen_16,
-      beperkt: rawData.BeperktVanwegeGezondheid_17,
-      moeiteRondkomen: rawData.MoeiteMetRondkomen_33
-    },
-    dataJaar: 2022
-  };
 }
 
 /**
@@ -166,49 +72,55 @@ async function fetchZorgVergelijking(
   gemeenteNaam?: string
 ): Promise<ZorgVergelijking> {
   const vergelijking: ZorgVergelijking = {
-    nederland: { naam: 'Nederland', eenzaam: 49.2 } // RIVM Gezondheidsmonitor 2022, dataset 50120NED (Eenzaam_27, NL01, 18+)
+    nederland: {
+      naam: 'Nederland',
+      eenzaam: 49.2,
+      ernstigEenzaam: 14.4,
+      angstDepressie: 10.2,
+      ervarenGezondheid: 69,
+      moeiteRondkomen: 20.5,
+      vrijwilligerswerk: 23.8,
+    }
+  };
+
+  const mapDataToNiveau = (data: Awaited<ReturnType<typeof fetchRIVMFromSupabase>>, naam: string): ZorgVergelijkingNiveau | null => {
+    if (!data?.eenzaamheid?.totaal && !data?.mentale_gezondheid?.angstDepressie) return null;
+    return {
+      naam,
+      eenzaam: data.eenzaamheid?.totaal ?? null,
+      ernstigEenzaam: data.eenzaamheid?.ernstig ?? null,
+      angstDepressie: data.mentale_gezondheid?.angstDepressie ?? null,
+      ervarenGezondheid: data.zorg_ondersteuning?.ervarenGezondheid ?? null,
+      moeiteRondkomen: data.zorg_ondersteuning?.moeiteRondkomen ?? null,
+      vrijwilligerswerk: data.zorg_ondersteuning?.vrijwilligerswerk ?? null,
+    };
   };
 
   const promises: Promise<void>[] = [];
 
-  // Buurt data
   if (buurtCode) {
     promises.push(
-      fetchRIVMData(buurtCode).then(data => {
-        if (data?.Eenzaam_27 !== undefined && data.Eenzaam_27 !== null) {
-          vergelijking.buurt = {
-            naam: buurtNaam || buurtCode,
-            eenzaam: data.Eenzaam_27
-          };
-        }
+      fetchRIVMFromSupabase(buurtCode).then(data => {
+        const niveau = mapDataToNiveau(data, buurtNaam || buurtCode);
+        if (niveau) vergelijking.buurt = niveau;
       })
     );
   }
 
-  // Wijk data
   if (wijkCode) {
     promises.push(
-      fetchRIVMData(wijkCode).then(data => {
-        if (data?.Eenzaam_27 !== undefined && data.Eenzaam_27 !== null) {
-          vergelijking.wijk = {
-            naam: wijkNaam || wijkCode,
-            eenzaam: data.Eenzaam_27
-          };
-        }
+      fetchRIVMFromSupabase(wijkCode).then(data => {
+        const niveau = mapDataToNiveau(data, wijkNaam || wijkCode);
+        if (niveau) vergelijking.wijk = niveau;
       })
     );
   }
 
-  // Gemeente data
   if (gemeenteCode) {
     promises.push(
-      fetchRIVMData(gemeenteCode).then(data => {
-        if (data?.Eenzaam_27 !== undefined && data.Eenzaam_27 !== null) {
-          vergelijking.gemeente = {
-            naam: gemeenteNaam || gemeenteCode,
-            eenzaam: data.Eenzaam_27
-          };
-        }
+      fetchRIVMFromSupabase(gemeenteCode).then(data => {
+        const niveau = mapDataToNiveau(data, gemeenteNaam || gemeenteCode);
+        if (niveau) vergelijking.gemeente = niveau;
       })
     );
   }
@@ -226,24 +138,50 @@ export async function fetchZorgWelzijnData(
   gemeenteCode?: string,
   gebiedNaam?: string,
   wijkNaam?: string,
-  gemeenteNaam?: string
+  gemeenteNaam?: string,
+  jaar?: number
 ): Promise<ZorgWelzijnData | null> {
   try {
-    // Parallel fetching
-    const [buurtRaw, trend, vergelijking] = await Promise.all([
-      fetchRIVMData(gebiedCode),
+    const [buurtData, trend, vergelijking] = await Promise.all([
+      fetchRIVMFromSupabase(gebiedCode, jaar),
       fetchRIVMTrendData(gebiedCode),
       fetchZorgVergelijking(gebiedCode, wijkCode, gemeenteCode, gebiedNaam, wijkNaam, gemeenteNaam)
     ]);
 
-    if (!buurtRaw) return null;
+    // Bepaal of buurt data bruikbaar is (niet all-null)
+    let effectiveData = buurtData;
+    const hasData = (d: typeof buurtData) =>
+      d?.eenzaamheid?.totaal != null || d?.mentale_gezondheid?.angstDepressie != null;
 
-    const baseData = processRIVMData(buurtRaw);
+    // Fallback: wijk -> gemeente als buurt data all-null is
+    if (!hasData(effectiveData)) {
+      if (wijkCode) {
+        const wijkData = await fetchRIVMFromSupabase(wijkCode);
+        if (hasData(wijkData)) effectiveData = wijkData;
+      }
+      if (!hasData(effectiveData) && gemeenteCode) {
+        const gmData = await fetchRIVMFromSupabase(gemeenteCode);
+        if (hasData(gmData)) effectiveData = gmData;
+      }
+    }
+
+    if (!effectiveData) return null;
 
     return {
-      ...baseData,
+      eenzaamheid: effectiveData.eenzaamheid ?? {
+        totaal: null, ernstig: null, emotioneel: null, sociaal: null,
+      },
+      mentaleGezondheid: effectiveData.mentale_gezondheid ?? {
+        angstDepressie: null, psychischeKlachten: null, stress: null,
+        emotioneleSteun: null, veerkracht: null,
+      },
+      zorgOndersteuning: effectiveData.zorg_ondersteuning ?? {
+        mantelzorger: null, vrijwilligerswerk: null, ervarenGezondheid: null,
+        langdurigeAandoeningen: null, beperkt: null, moeiteRondkomen: null,
+      },
+      dataJaar: effectiveData.jaar ?? 2022,
       trend,
-      vergelijking
+      vergelijking,
     };
   } catch (error) {
     console.error('Error fetching zorg welzijn data:', error);

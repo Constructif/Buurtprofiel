@@ -1,1 +1,4 @@
 .vercel
+.env
+scripts/.env
+scripts/node_modules

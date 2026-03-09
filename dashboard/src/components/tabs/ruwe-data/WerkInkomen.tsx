@@ -1,9 +1,13 @@
+import { useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
 import type { UitkeringenData } from '../../../types/werkInkomen';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenWerkInkomenScore } from '../../../utils/scoring';
 import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { fetchKerncijfersForYear, fetchKerncijfersAllYears } from '../../../services/cbs';
+import { useCardYear } from '../../../hooks/useCardYear';
+import { CardTrendChart } from '../../ui/CardTrendChart';
 import {
   BarChart,
   Bar,
@@ -108,8 +112,34 @@ export function WerkInkomen() {
 
   if (!gebiedData) return null;
 
-  const { inkomen, werkInkomen } = gebiedData;
-  const jaar = gebiedData.kerncijfersJaar || 2024;
+  // Shared fetchers — individuele hook instances per Card
+  const kcFetcher = useCallback(
+    (jaar: number) => fetchKerncijfersForYear(gebiedData.code, jaar),
+    [gebiedData.code]
+  );
+  const kcTrendFetcher = useCallback(
+    () => fetchKerncijfersAllYears(gebiedData.code),
+    [gebiedData.code]
+  );
+
+  // Individuele hook instances
+  const inkomenCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+  const uitkeringenCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+
+  // Helper: extract inkomen/werk data van een card hook
+  const getCardInkomen = (card: typeof inkomenCard) => {
+    const ink = card.overrideData?.inkomen ?? gebiedData.inkomen;
+    const jaar = card.overrideData?._jaar ?? gebiedData.kerncijfersJaar;
+    return { ink: ink ?? { gemiddeld: null, laagInkomenPercentage: 0, hoogInkomenPercentage: 0 }, jaar: jaar || 2024 };
+  };
+
+  const inkomenData = getCardInkomen(inkomenCard);
+  const uitkeringenJaar = uitkeringenCard.overrideData?._jaar ?? gebiedData.kerncijfersJaar ?? 2024;
+
+  // Gebruik gebiedData voor default (niet-overridden) data
+  const inkomen = inkomenData.ink;
+  const werkInkomen = gebiedData.werkInkomen;
+  const jaar = inkomenData.jaar;
 
   // Bereken midden inkomen als we laag en hoog hebben
   const laagInkomen = inkomen.laagInkomenPercentage;
@@ -138,13 +168,28 @@ export function WerkInkomen() {
       <AandachtspuntenCard punten={aandachtspunten} />
 
       {/* Inkomen Card */}
-      <InkomenCard
-        gemiddeld={inkomen.gemiddeld}
-        laag={laagInkomen}
-        midden={middenInkomen}
-        hoog={hoogInkomen}
-        jaar={jaar}
-      />
+      {inkomenCard.activeMode === 'trend' && inkomenCard.trendData ? (
+        <Card title="Inkomen Trend" badge="data" year={jaar}
+          onYearChange={inkomenCard.handleYearChange} availableYears={inkomenCard.availableYears}
+          activeYearMode={inkomenCard.activeMode} yearsWithData={inkomenCard.yearsWithData}>
+          <CardTrendChart
+            data={inkomenCard.trendData}
+            lines={[{ key: 'inkomen', label: 'Gem. inkomen (€)', color: '#eb6608' }]}
+          />
+        </Card>
+      ) : (
+        <InkomenCard
+          gemiddeld={inkomen.gemiddeld}
+          laag={laagInkomen}
+          midden={middenInkomen}
+          hoog={hoogInkomen}
+          jaar={jaar}
+          onYearChange={inkomenCard.handleYearChange}
+          availableYears={inkomenCard.availableYears}
+          activeYearMode={inkomenCard.activeMode}
+          yearsWithData={inkomenCard.yearsWithData}
+        />
+      )}
 
       {/* Grid: Opleiding + Werkgelegenheid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
@@ -166,8 +211,12 @@ export function WerkInkomen() {
       <UitkeringenCard
         data={werkInkomen?.uitkeringen ?? null}
         bevolking={gebiedData.bevolking.totaal}
-        jaar={jaar}
+        jaar={uitkeringenJaar}
         gebiedType={selectedGebied.type}
+        onYearChange={uitkeringenCard.handleYearChange}
+        availableYears={uitkeringenCard.availableYears}
+        activeYearMode={uitkeringenCard.activeMode}
+        yearsWithData={uitkeringenCard.yearsWithData}
       />
     </div>
   );
@@ -258,13 +307,21 @@ function InkomenCard({
   laag,
   midden,
   hoog,
-  jaar
+  jaar,
+  onYearChange,
+  availableYears,
+  activeYearMode,
+  yearsWithData,
 }: {
-  gemiddeld: number | null;  // null als niet beschikbaar
+  gemiddeld: number | null;
   laag: number | null;
   midden: number | null;
   hoog: number | null;
   jaar: number;
+  onYearChange?: (jaar: number | 'trend') => void;
+  availableYears?: number[];
+  activeYearMode?: number | 'trend';
+  yearsWithData?: number[];
 }) {
   const inkomenData = [
     { name: 'Laag inkomen', value: laag ?? 0, color: COLORS.red },
@@ -287,6 +344,11 @@ function InkomenCard({
       badge="data"
       badgeText={`CBS Kerncijfers ${jaar}`}
       badgeTooltip="Dataset 85984NED - Gemiddeld besteedbaar inkomen per inkomensontvanger"
+      year={jaar}
+      onYearChange={onYearChange}
+      availableYears={availableYears}
+      activeYearMode={activeYearMode}
+      yearsWithData={yearsWithData}
     >
       <div style={{ padding: '8px 0' }}>
         {/* Hoofd KPI */}
@@ -649,12 +711,20 @@ function UitkeringenCard({
   data,
   bevolking,
   jaar,
-  gebiedType
+  gebiedType,
+  onYearChange,
+  availableYears,
+  activeYearMode,
+  yearsWithData,
 }: {
   data: UitkeringenData | null;
   bevolking: number;
   jaar: number;
   gebiedType: 'buurt' | 'wijk' | 'gemeente';
+  onYearChange?: (jaar: number | 'trend') => void;
+  availableYears?: number[];
+  activeYearMode?: number | 'trend';
+  yearsWithData?: number[];
 }) {
   const hasData = data && (data.bijstand !== null || data.ww !== null || data.ao !== null || data.aow !== null);
 
@@ -677,6 +747,11 @@ function UitkeringenCard({
       badge={hasData ? 'data' : 'placeholder'}
       badgeText={`CBS Kerncijfers ${jaar}`}
       badgeTooltip="Dataset 85984NED - Personen met uitkering per wijk en buurt"
+      year={jaar}
+      onYearChange={onYearChange}
+      availableYears={availableYears}
+      activeYearMode={activeYearMode}
+      yearsWithData={yearsWithData}
     >
       {hasData && data ? (
         <div>

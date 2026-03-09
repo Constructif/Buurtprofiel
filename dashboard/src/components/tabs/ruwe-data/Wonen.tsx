@@ -1,9 +1,13 @@
+import { useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
+import { CardTrendChart } from '../../ui/CardTrendChart';
 import { InfoGrid } from '../../ui/InfoGrid';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenWonenScore } from '../../../utils/scoring';
 import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { fetchKerncijfersForYear, fetchKerncijfersAllYears } from '../../../services/cbs';
+import { useCardYear } from '../../../hooks/useCardYear';
 import {
   PieChart,
   Pie,
@@ -44,28 +48,55 @@ export function Wonen() {
     );
   }
 
-  const { woningen, kerncijfersJaar, bevolkingsDynamiek, gemeenteNaam } = gebiedData;
-  const totaal = woningen.totaal;
-  const koopAantal = Math.round((woningen.koopPercentage / 100) * totaal);
-  const huurAantal = Math.round((woningen.huurPercentage / 100) * totaal);
+  // Shared fetchers — individuele hook instances per Card
+  const kcFetcher = useCallback(
+    (jaar: number) => fetchKerncijfersForYear(gebiedData.code, jaar),
+    [gebiedData.code]
+  );
+  const kcTrendFetcher = useCallback(
+    () => fetchKerncijfersAllYears(gebiedData.code),
+    [gebiedData.code]
+  );
 
+  // Elke Card krijgt eigen hook instance
+  const voorraadCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+  const koopHuurCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+  const huurDetailCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
+
+  // Helper: extract woningen data
+  const getWonenData = (card: typeof voorraadCard) => {
+    const won = card.overrideData?.woningen ?? gebiedData.woningen;
+    const jaar = card.overrideData?._jaar ?? gebiedData.kerncijfersJaar;
+    return { won, jaar };
+  };
+
+  const voorraad = getWonenData(voorraadCard);
+  const koopHuur = getWonenData(koopHuurCard);
+  const huurDetail = getWonenData(huurDetailCard);
+
+  // Woningvoorraad berekeningen
+  const totaal = voorraad.won.totaal;
+  const koopAantal = Math.round((voorraad.won.koopPercentage / 100) * totaal);
+  const huurAantal = Math.round((voorraad.won.huurPercentage / 100) * totaal);
+
+  // Koop/Huur data
   const koopHuurData = [
-    { name: `Koop (${Math.round(woningen.koopPercentage)}%)`, value: woningen.koopPercentage },
-    { name: `Huur (${Math.round(woningen.huurPercentage)}%)`, value: woningen.huurPercentage },
+    { name: `Koop (${Math.round(koopHuur.won.koopPercentage)}%)`, value: koopHuur.won.koopPercentage },
+    { name: `Huur (${Math.round(koopHuur.won.huurPercentage)}%)`, value: koopHuur.won.huurPercentage },
   ];
 
-  // Woningtypes data uit CBS
+  // Woningtypes
   const woningtypeData = [
-    { name: 'Appartement', value: Math.round(woningen.meergezinsPercentage) },
-    { name: 'Tussenwoning', value: Math.round(woningen.tussenwoningPercentage) },
-    { name: 'Hoekwoning', value: Math.round(woningen.hoekwoningPercentage) },
-    { name: 'Twee-onder-één-kap', value: Math.round(woningen.tweeOnderEenKapPercentage) },
-    { name: 'Vrijstaand', value: Math.round(woningen.vrijstaandPercentage) },
+    { name: 'Appartement', value: Math.round(gebiedData.woningen.meergezinsPercentage) },
+    { name: 'Tussenwoning', value: Math.round(gebiedData.woningen.tussenwoningPercentage) },
+    { name: 'Hoekwoning', value: Math.round(gebiedData.woningen.hoekwoningPercentage) },
+    { name: 'Twee-onder-één-kap', value: Math.round(gebiedData.woningen.tweeOnderEenKapPercentage) },
+    { name: 'Vrijstaand', value: Math.round(gebiedData.woningen.vrijstaandPercentage) },
   ].filter(item => item.value > 0);
-
   const hasWoningtypeData = woningtypeData.length > 0;
 
-  // Verhuisbewegingen data voorbereiden
+  // Verhuisbewegingen
+  const { bevolkingsDynamiek } = gebiedData;
   const hasVerhuisData = bevolkingsDynamiek && bevolkingsDynamiek.jaren.length > 0;
   const verhuisChartData = hasVerhuisData
     ? bevolkingsDynamiek.jaren.map((jaar) => ({
@@ -75,13 +106,11 @@ export function Wonen() {
         Saldo: jaar.saldo,
       }))
     : [];
-
-  // Bepaal het meest recente jaar voor de badge
   const verhuisDataJaar = hasVerhuisData
     ? bevolkingsDynamiek.jaren[bevolkingsDynamiek.jaren.length - 1]?.jaar
     : undefined;
 
-  // Score berekening
+  // Score
   const benchmarks = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
     ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
     : NL_BENCHMARKS;
@@ -90,60 +119,68 @@ export function Wonen() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       <TabScoreHeader tabScore={tabScore} />
+
       {/* Woningvoorraad */}
-      <Card title="Woningvoorraad" badge="data" year={kerncijfersJaar}>
-        <InfoGrid
-          items={[
-            { label: 'Totaal woningen', value: formatNumber(totaal) },
-            { label: 'Koop', value: `${Math.round(woningen.koopPercentage)}% (${formatNumber(koopAantal)})` },
-            { label: 'Huur', value: `${Math.round(woningen.huurPercentage)}% (${formatNumber(huurAantal)})` },
-            { label: 'Huur sociaal', value: `${Math.round(woningen.huurSociaalPercentage)}%` },
-          ]}
-        />
+      <Card title="Woningvoorraad" badge="data" year={voorraad.jaar}
+        onYearChange={voorraadCard.handleYearChange} availableYears={voorraadCard.availableYears}
+        activeYearMode={voorraadCard.activeMode} yearsWithData={voorraadCard.yearsWithData}>
+        {voorraadCard.isLoading ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+        ) : voorraadCard.activeMode === 'trend' && voorraadCard.trendData ? (
+          <CardTrendChart
+            data={voorraadCard.trendData}
+            lines={[{ key: 'huishoudens', label: 'Huishoudens', color: '#eb6608' }]}
+          />
+        ) : (
+          <InfoGrid
+            items={[
+              { label: 'Totaal woningen', value: formatNumber(totaal) },
+              { label: 'Koop', value: `${Math.round(voorraad.won.koopPercentage)}% (${formatNumber(koopAantal)})` },
+              { label: 'Huur', value: `${Math.round(voorraad.won.huurPercentage)}% (${formatNumber(huurAantal)})` },
+              { label: 'Huur sociaal', value: `${Math.round(voorraad.won.huurSociaalPercentage)}%` },
+            ]}
+          />
+        )}
       </Card>
 
       {/* Charts grid */}
       <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Koop vs Huur */}
-        <Card title="Koop vs Huur" badge="data" year={kerncijfersJaar}>
-          <div style={{ height: '320px' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={koopHuurData}
-                  dataKey="value"
-                  nameKey="name"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label
-                >
-                  {koopHuurData.map((_, index) => (
-                    <Cell key={index} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value) => `${Math.round(value as number)}%`} />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+        <Card title="Koop vs Huur" badge="data" year={koopHuur.jaar}
+          onYearChange={koopHuurCard.handleYearChange} availableYears={koopHuurCard.availableYears}
+          activeYearMode={koopHuurCard.activeMode} yearsWithData={koopHuurCard.yearsWithData}>
+          {koopHuurCard.isLoading ? (
+            <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+          ) : koopHuurCard.activeMode === 'trend' && koopHuurCard.trendData ? (
+            <CardTrendChart
+              data={koopHuurCard.trendData}
+              lines={[{ key: 'huishoudens', label: 'Huishoudens', color: '#eb6608' }]}
+            />
+          ) : (
+            <div style={{ height: '320px' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie data={koopHuurData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                    {koopHuurData.map((_, index) => (
+                      <Cell key={index} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `${Math.round(value as number)}%`} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </Card>
 
         {/* Woningtypes */}
-        <Card title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? kerncijfersJaar : undefined}>
+        <Card title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? gebiedData.kerncijfersJaar : undefined}>
           {hasWoningtypeData ? (
             <div style={{ height: '320px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={woningtypeData}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={({ name, value }) => `${name}: ${value}%`}
-                  >
+                  <Pie data={woningtypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                    label={({ name, value }) => `${name}: ${value}%`}>
                     {woningtypeData.map((_, index) => (
                       <Cell key={index} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -162,19 +199,30 @@ export function Wonen() {
       </div>
 
       {/* Huurdetails */}
-      <Card title="Huurwoningen Detail" badge="data" year={kerncijfersJaar}>
-        <InfoGrid
-          items={[
-            { label: 'Totaal huur', value: `${Math.round(woningen.huurPercentage)}%` },
-            { label: 'Woningcorporatie', value: `${Math.round(woningen.huurSociaalPercentage)}%` },
-            { label: 'Overige verhuurders', value: `${Math.round(woningen.huurParticulierPercentage)}%` },
-          ]}
-        />
+      <Card title="Huurwoningen Detail" badge="data" year={huurDetail.jaar}
+        onYearChange={huurDetailCard.handleYearChange} availableYears={huurDetailCard.availableYears}
+        activeYearMode={huurDetailCard.activeMode} yearsWithData={huurDetailCard.yearsWithData}>
+        {huurDetailCard.isLoading ? (
+          <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280', fontSize: '13px' }}>Laden...</div>
+        ) : huurDetailCard.activeMode === 'trend' && huurDetailCard.trendData ? (
+          <CardTrendChart
+            data={huurDetailCard.trendData}
+            lines={[{ key: 'huishoudens', label: 'Huishoudens', color: '#eb6608' }]}
+          />
+        ) : (
+          <InfoGrid
+            items={[
+              { label: 'Totaal huur', value: `${Math.round(huurDetail.won.huurPercentage)}%` },
+              { label: 'Woningcorporatie', value: `${Math.round(huurDetail.won.huurSociaalPercentage)}%` },
+              { label: 'Overige verhuurders', value: `${Math.round(huurDetail.won.huurParticulierPercentage)}%` },
+            ]}
+          />
+        )}
       </Card>
 
       {/* Verhuisbewegingen */}
       <Card
-        title={`Verhuisbewegingen${gemeenteNaam && selectedGebied?.type !== 'gemeente' ? ` - Gemeente ${gemeenteNaam}` : ''}`}
+        title={`Verhuisbewegingen${gebiedData.gemeenteNaam && selectedGebied?.type !== 'gemeente' ? ` - Gemeente ${gebiedData.gemeenteNaam}` : ''}`}
         badge={hasVerhuisData ? "data" : "placeholder"}
         year={verhuisDataJaar}
       >
@@ -199,17 +247,9 @@ export function Wonen() {
                 </BarChart>
               </ResponsiveContainer>
             </div>
-            {/* Saldo overzicht */}
             <div style={{ marginTop: '16px', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
               {verhuisChartData.map((item) => (
-                <div
-                  key={item.jaar}
-                  style={{
-                    padding: '8px 12px',
-                    backgroundColor: item.Saldo >= 0 ? '#dcfce7' : '#fee2e2',
-                    borderRadius: '4px',
-                  }}
-                >
+                <div key={item.jaar} style={{ padding: '8px 12px', backgroundColor: item.Saldo >= 0 ? '#dcfce7' : '#fee2e2', borderRadius: '4px' }}>
                   <span style={{ fontSize: '12px', color: '#6b7280' }}>{item.jaar}: </span>
                   <span style={{ fontWeight: 600, color: item.Saldo >= 0 ? '#15803d' : '#dc2626' }}>
                     {item.Saldo >= 0 ? '+' : ''}{formatNumber(item.Saldo)}
