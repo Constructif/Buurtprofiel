@@ -1,17 +1,98 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
 
 const ALLOWED_DOMAIN = '@constructif.nl';
+const MAX_EMAILS_PER_HOUR = 2;
+const ONE_HOUR_MS = 60 * 60 * 1000;
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
   const [error, setError] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isSent, setIsSent] = useState(false);
+  const [emailsUsed, setEmailsUsed] = useState<number | null>(null);
+  const [nextSlotIn, setNextSlotIn] = useState<number | null>(null);
+  const [statusAvailable, setStatusAvailable] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Haal de status op uit de email_log tabel
+  const fetchStatus = useCallback(async () => {
+    const oneHourAgo = new Date(Date.now() - ONE_HOUR_MS).toISOString();
+
+    const { data, error: queryError } = await supabase
+      .from('email_log')
+      .select('sent_at')
+      .gte('sent_at', oneHourAgo)
+      .order('sent_at', { ascending: true });
+
+    // Tabel bestaat niet → verberg indicator
+    if (queryError) {
+      setStatusAvailable(false);
+      return;
+    }
+
+    setStatusAvailable(true);
+    const count = data?.length ?? 0;
+    setEmailsUsed(count);
+
+    if (count >= MAX_EMAILS_PER_HOUR && data && data.length > 0) {
+      const oldestSentAt = new Date(data[0].sent_at).getTime();
+      const freeAt = oldestSentAt + ONE_HOUR_MS;
+      const secondsLeft = Math.max(0, Math.ceil((freeAt - Date.now()) / 1000));
+      setNextSlotIn(secondsLeft);
+    } else {
+      setNextSlotIn(null);
+    }
+  }, []);
+
+  // Countdown timer
+  useEffect(() => {
+    if (nextSlotIn === null || nextSlotIn <= 0) return;
+
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setNextSlotIn((prev) => {
+        if (prev === null || prev <= 1) {
+          if (timerRef.current) clearInterval(timerRef.current);
+          timerRef.current = null;
+          fetchStatus();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [nextSlotIn !== null && nextSlotIn > 0, fetchStatus]);
+
+  // Poll elke 15 seconden
+  useEffect(() => {
+    fetchStatus();
+    const poll = setInterval(fetchStatus, 15_000);
+    return () => {
+      clearInterval(poll);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [fetchStatus]);
+
+  const formatTime = (seconds: number) => {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    if (m > 0) return `${m}:${s.toString().padStart(2, '0')}`;
+    return `0:${s.toString().padStart(2, '0')}`;
+  };
+
+  const remaining = emailsUsed !== null ? Math.max(0, MAX_EMAILS_PER_HOUR - emailsUsed) : null;
+  const isLimitReached = statusAvailable && remaining === 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+
+    // Hercheck status voor submit
+    await fetchStatus();
 
     const trimmed = email.trim().toLowerCase();
 
@@ -38,21 +119,36 @@ export function LoginPage() {
 
     if (supabaseError) {
       console.error('Supabase OTP error:', supabaseError.message, supabaseError);
+      const msg = supabaseError.message?.toLowerCase() || '';
 
-      if (supabaseError.message?.includes('rate') || supabaseError.status === 429) {
-        setError('Je hebt te snel achter elkaar geprobeerd. Wacht even en probeer het opnieuw.');
-      } else if (supabaseError.message?.includes('not authorized') || supabaseError.message?.includes('not allowed')) {
+      if (msg.includes('rate') || msg.includes('limit') || supabaseError.status === 429) {
+        // Log in de tabel zodat andere gebruikers het ook zien
+        await supabase.from('email_log').insert({ sent_at: new Date().toISOString() });
+        await fetchStatus();
+        setError('E-mail limiet bereikt.');
+      } else if (msg.includes('not authorized') || msg.includes('not allowed')) {
         setError('Dit e-mailadres is niet geautoriseerd. Neem contact op met de beheerder.');
-      } else if (supabaseError.message?.includes('email')) {
-        setError(`E-mail kon niet worden verstuurd: ${supabaseError.message}`);
       } else {
         setError(`Er ging iets mis: ${supabaseError.message || 'Onbekende fout'}. Probeer het opnieuw.`);
       }
       return;
     }
 
+    // Succes — log in de tabel
+    await supabase.from('email_log').insert({ sent_at: new Date().toISOString() });
+    await fetchStatus();
     setIsSent(true);
   };
+
+  const isDisabled = isSending || isLimitReached;
+
+  const statusColor = !statusAvailable || remaining === null
+    ? '#999'
+    : isLimitReached
+      ? '#d32f2f'
+      : remaining === 1
+        ? '#e65100'
+        : '#2e7d32';
 
   return (
     <div style={{
@@ -171,9 +267,40 @@ export function LoginPage() {
                   {error}
                 </p>
               )}
+
+              {/* Live status indicator — alleen als email_log tabel bestaat */}
+              {statusAvailable && remaining !== null && (
+                <div style={{
+                  marginTop: '12px',
+                  padding: '10px 14px',
+                  backgroundColor: isLimitReached ? '#ffebee' : '#f5f5f5',
+                  border: `1px solid ${isLimitReached ? '#ffcdd2' : '#e0e0e0'}`,
+                  fontSize: '13px',
+                  color: statusColor,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}>
+                  <span style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: statusColor,
+                    flexShrink: 0,
+                  }} />
+                  {isLimitReached && nextSlotIn !== null && nextSlotIn > 0 ? (
+                    <span>Limiet bereikt — weer beschikbaar over <strong>{formatTime(nextSlotIn)}</strong></span>
+                  ) : isLimitReached ? (
+                    <span>Limiet bereikt — wordt zo weer beschikbaar...</span>
+                  ) : (
+                    <span><strong>{remaining} van {MAX_EMAILS_PER_HOUR}</strong> login mails beschikbaar</span>
+                  )}
+                </div>
+              )}
+
               <button
                 type="submit"
-                disabled={isSending}
+                disabled={isDisabled}
                 style={{
                   width: '100%',
                   marginTop: '16px',
@@ -181,12 +308,16 @@ export function LoginPage() {
                   fontSize: '15px',
                   fontWeight: 600,
                   color: 'white',
-                  backgroundColor: isSending ? '#ccc' : '#eb6608',
+                  backgroundColor: isDisabled ? '#ccc' : '#eb6608',
                   border: 'none',
-                  cursor: isSending ? 'default' : 'pointer',
+                  cursor: isDisabled ? 'default' : 'pointer',
                 }}
               >
-                {isSending ? 'Versturen...' : 'Verstuur magic link'}
+                {isSending
+                  ? 'Versturen...'
+                  : isLimitReached && nextSlotIn !== null && nextSlotIn > 0
+                    ? `Beschikbaar over ${formatTime(nextSlotIn)}`
+                    : 'Verstuur magic link'}
               </button>
             </form>
           )}
