@@ -176,7 +176,7 @@ export function GebiedSearch() {
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1)',
             border: '1px solid #e5e7eb',
             zIndex: 50,
-            minWidth: '400px'
+            minWidth: 'min(400px, calc(100vw - 32px))'
           }}
         >
           <div className="search-dropdown-content" style={{ padding: '16px' }}>

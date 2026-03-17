@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { BuurtMap } from '../../maps/BuurtMap';
 import {
@@ -67,6 +67,24 @@ export function Overzicht() {
     loadExtraData();
   }, [selectedGebied, gebiedData, selectedJaar]);
 
+  // Haal voorzieningen uit cache
+  const voorzieningenCache = selectedGebied ? getVoorzieningenCache(selectedGebied.code) : null;
+  const voorzieningen = voorzieningenCache?.voorzieningen ?? [];
+
+  // Bepaal benchmarks
+  const isGemeente = selectedGebied?.type === 'gemeente';
+  const activeBenchmarkType = isGemeente ? 'nederland' : benchmarkType;
+  const benchmarks = (activeBenchmarkType === 'gemeente' && gebiedData)
+    ? getGemeenteBenchmarks(gebiedData, gemeenteData, zorgData, leefomgevingData)
+    : NL_BENCHMARKS;
+
+  // Bereken score (gememoized — herberekent alleen bij gewijzigde inputs)
+  const buurtprofiel = useMemo(
+    () => gebiedData ? berekenBuurtprofielScore(gebiedData, voorzieningen, zorgData, leefomgevingData, benchmarks) : null,
+    [gebiedData, voorzieningen, zorgData, leefomgevingData, benchmarks],
+  );
+
+  // Early returns NA alle hooks — voorkomt "Rendered more hooks" error
   if (!selectedGebied) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
@@ -84,29 +102,13 @@ export function Overzicht() {
     );
   }
 
-  if (!gebiedData) {
+  if (!gebiedData || !buurtprofiel) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
         <p>Geen data beschikbaar voor dit gebied</p>
       </div>
     );
   }
-
-  // Haal voorzieningen uit cache
-  const voorzieningenCache = getVoorzieningenCache(selectedGebied.code);
-  const voorzieningen = voorzieningenCache?.voorzieningen ?? [];
-
-  // Bepaal benchmarks
-  const isGemeente = selectedGebied.type === 'gemeente';
-  const activeBenchmarkType = isGemeente ? 'nederland' : benchmarkType;
-  const benchmarks = activeBenchmarkType === 'gemeente'
-    ? getGemeenteBenchmarks(gebiedData, gemeenteData, zorgData, leefomgevingData)
-    : NL_BENCHMARKS;
-
-  // Bereken score
-  const buurtprofiel = berekenBuurtprofielScore(
-    gebiedData, voorzieningen, zorgData, leefomgevingData, benchmarks,
-  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

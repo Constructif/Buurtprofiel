@@ -182,6 +182,7 @@ export function Voorzieningen() {
     ])
   );
   const [selectedVoorziening, setSelectedVoorziening] = useState<string | null>(null);
+  const [expandedTypes, setExpandedTypes] = useState<Set<string>>(new Set());
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const mapRef = useRef<Map | null>(null);
 
@@ -623,7 +624,7 @@ export function Voorzieningen() {
                       {getTypeLabel(type as VoorzieningType)} ({items.length})
                     </h4>
                     <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                      {items.map((item) => (
+                      {(expandedTypes.has(type) ? items : items.slice(0, 50)).map((item) => (
                         <li
                           key={item.id}
                           onClick={() => handleVoorzieningClick(item)}
@@ -664,6 +665,24 @@ export function Voorzieningen() {
                         </li>
                       ))}
                     </ul>
+                    {items.length > 50 && !expandedTypes.has(type) && (
+                      <button
+                        onClick={() => setExpandedTypes(prev => new Set([...prev, type]))}
+                        style={{
+                          width: '100%',
+                          padding: '8px',
+                          marginTop: '4px',
+                          backgroundColor: '#f3f4f6',
+                          border: 'none',
+                          fontSize: '12px',
+                          color: '#6b7280',
+                          cursor: 'pointer',
+                          borderRadius: '4px',
+                        }}
+                      >
+                        Toon alle {items.length} items
+                      </button>
+                    )}
                   </div>
                 );
               })}

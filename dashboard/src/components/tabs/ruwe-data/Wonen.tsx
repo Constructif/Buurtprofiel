@@ -31,6 +31,23 @@ const COLORS = ['#eb6608', '#1d1d1b', '#3498db', '#2ecc71'];
 export function Wonen() {
   const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
 
+  // Alle hooks MOETEN boven early returns staan (React hooks regels)
+  const code = gebiedData?.code ?? '';
+  const defaultJaar = gebiedData?.kerncijfersJaar ?? 2025;
+
+  const kcFetcher = useCallback(
+    (jaar: number) => fetchKerncijfersForYear(code, jaar),
+    [code]
+  );
+  const kcTrendFetcher = useCallback(
+    () => fetchKerncijfersAllYears(code),
+    [code]
+  );
+
+  const voorraadCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+  const koopHuurCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+  const huurDetailCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+
   if (!selectedGebied) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
@@ -47,21 +64,6 @@ export function Wonen() {
       </div>
     );
   }
-
-  // Shared fetchers — individuele hook instances per Card
-  const kcFetcher = useCallback(
-    (jaar: number) => fetchKerncijfersForYear(gebiedData.code, jaar),
-    [gebiedData.code]
-  );
-  const kcTrendFetcher = useCallback(
-    () => fetchKerncijfersAllYears(gebiedData.code),
-    [gebiedData.code]
-  );
-
-  // Elke Card krijgt eigen hook instance
-  const voorraadCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
-  const koopHuurCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
-  const huurDetailCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
 
   // Helper: extract woningen data
   const getWonenData = (card: typeof voorraadCard) => {
@@ -160,7 +162,7 @@ export function Wonen() {
             <div style={{ height: '320px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie data={koopHuurData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label>
+                  <Pie data={koopHuurData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} label animationDuration={300}>
                     {koopHuurData.map((_, index) => (
                       <Cell key={index} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -180,7 +182,7 @@ export function Wonen() {
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <Pie data={woningtypeData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
-                    label={({ name, value }) => `${name}: ${value}%`}>
+                    animationDuration={300} label={({ name, value }) => `${name}: ${value}%`}>
                     {woningtypeData.map((_, index) => (
                       <Cell key={index} fill={COLORS[index % COLORS.length]} />
                     ))}
@@ -242,8 +244,8 @@ export function Wonen() {
                     labelFormatter={(label) => `Jaar ${label}`}
                   />
                   <Legend />
-                  <Bar dataKey="Vestiging" name="Vestiging (in)" fill="#2ecc71" />
-                  <Bar dataKey="Vertrek" name="Vertrek (uit)" fill="#e74c3c" />
+                  <Bar dataKey="Vestiging" name="Vestiging (in)" fill="#2ecc71" animationDuration={300} />
+                  <Bar dataKey="Vertrek" name="Vertrek (uit)" fill="#e74c3c" animationDuration={300} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

@@ -266,6 +266,7 @@ export function Leefomgeving() {
                     outerRadius={80}
                     paddingAngle={2}
                     dataKey="value"
+                    animationDuration={300}
                     label={({ name, value }) => `${name}: ${value.toFixed(1)} ha`}
                     labelLine={{ stroke: '#6b7280', strokeWidth: 1 }}
                   >
@@ -582,7 +583,7 @@ function VergelijkingChart({
             formatter={(value?: number) => value !== undefined ? [`${value} m²`, 'Groen per inwoner'] : ['-', '']}
             contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0', fontSize: '12px' }}
           />
-          <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+          <Bar dataKey="value" radius={[0, 4, 4, 0]} animationDuration={300}>
             {data.map((entry, index) => (
               <Cell
                 key={`cell-${index}`}

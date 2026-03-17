@@ -47,6 +47,36 @@ export function Bewoners() {
   const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
   const [showDichtheidInfo, setShowDichtheidInfo] = useState(false);
 
+  // Alle hooks MOETEN boven early returns staan (React hooks regels)
+  const code = gebiedData?.code ?? '';
+  const gemeenteCode = selectedGebied?.gemeenteCode || selectedGebied?.code || '';
+  const defaultJaar = gebiedData?.kerncijfersJaar ?? 2025;
+
+  const kcFetcher = useCallback(
+    (jaar: number) => fetchKerncijfersForYear(code, jaar),
+    [code]
+  );
+  const kcTrendFetcher = useCallback(
+    () => fetchKerncijfersAllYears(code),
+    [code]
+  );
+  const herkomstLandFetcher = useCallback(
+    (jaar: number) => fetchHerkomstLandForYear(gemeenteCode, jaar),
+    [gemeenteCode]
+  );
+  const herkomstLandTrendFetcher = useCallback(
+    () => fetchHerkomstLandAllYears(gemeenteCode),
+    [gemeenteCode]
+  );
+
+  const demografischCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+  const leeftijdCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+  const herkomstCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+  const huishoudensCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+  const herkomstLandCard = useCardYear<HerkomstLandData>(
+    gebiedData?.herkomstLandGemeente?.dataJaar ?? 2025, herkomstLandFetcher, herkomstLandTrendFetcher
+  );
+
   if (!selectedGebied) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
@@ -63,36 +93,6 @@ export function Bewoners() {
       </div>
     );
   }
-
-  // Shared fetchers — elke Card krijgt zijn eigen hook instance
-  const kcFetcher = useCallback(
-    (jaar: number) => fetchKerncijfersForYear(gebiedData.code, jaar),
-    [gebiedData.code]
-  );
-  const kcTrendFetcher = useCallback(
-    () => fetchKerncijfersAllYears(gebiedData.code),
-    [gebiedData.code]
-  );
-
-  // Herkomst per Land fetchers
-  const gemeenteCode = selectedGebied.gemeenteCode || selectedGebied.code;
-  const herkomstLandFetcher = useCallback(
-    (jaar: number) => fetchHerkomstLandForYear(gemeenteCode, jaar),
-    [gemeenteCode]
-  );
-  const herkomstLandTrendFetcher = useCallback(
-    () => fetchHerkomstLandAllYears(gemeenteCode),
-    [gemeenteCode]
-  );
-
-  // Individuele hook instances per Card
-  const demografischCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
-  const leeftijdCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
-  const herkomstCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
-  const huishoudensCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
-  const herkomstLandCard = useCardYear<HerkomstLandData>(
-    gebiedData.herkomstLandGemeente?.dataJaar ?? 2025, herkomstLandFetcher, herkomstLandTrendFetcher
-  );
 
   // Helper: extract bevolking+huishoudens data van een card hook
   const getCardData = (card: typeof demografischCard) => {
@@ -215,7 +215,7 @@ export function Bewoners() {
                     const payload = props.payload as { percentage: number };
                     return [`${formatNumber(value as number)} (${payload.percentage}%)`, 'Aantal'];
                   }} />
-                  <Bar dataKey="value" fill="#eb6608" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="value" fill="#eb6608" radius={[4, 4, 0, 0]} animationDuration={300} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -242,6 +242,7 @@ export function Bewoners() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie data={cultuurData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100}
+                      animationDuration={300}
                       label={(entry) => `${entry.name} (${Math.round((entry.percent || 0) * 100)}%)`}>
                       {cultuurData.map((_, index) => (
                         <Cell key={index} fill={COLORS[index % COLORS.length]} />
@@ -341,7 +342,7 @@ export function Bewoners() {
                         const isEuropa = land ? EUROPESE_LANDEN.includes(land) : false;
                         return [`${value}% van totale bevolking`, isEuropa ? 'Europa' : 'Buiten Europa'];
                       }} />
-                      <Bar dataKey="percentage" radius={[0, 4, 4, 0]}>
+                      <Bar dataKey="percentage" radius={[0, 4, 4, 0]} animationDuration={300}>
                         {alleLandenMetPercentage.map((item, index) => (
                           <Cell key={index} fill={getHerkomstLandKleur(item.land)} />
                         ))}
@@ -402,7 +403,7 @@ export function Bewoners() {
                   <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                   <YAxis />
                   <Tooltip formatter={(value) => formatNumber(value as number)} />
-                  <Bar dataKey="value" fill="#1d1d1b" radius={[0, 0, 0, 0]} />
+                  <Bar dataKey="value" fill="#1d1d1b" radius={[0, 0, 0, 0]} animationDuration={300} />
                 </BarChart>
               </ResponsiveContainer>
             </div>

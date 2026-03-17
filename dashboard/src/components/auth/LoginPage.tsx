@@ -37,7 +37,17 @@ export function LoginPage() {
     setIsSending(false);
 
     if (supabaseError) {
-      setError('Er ging iets mis. Probeer het opnieuw.');
+      console.error('Supabase OTP error:', supabaseError.message, supabaseError);
+
+      if (supabaseError.message?.includes('rate') || supabaseError.status === 429) {
+        setError('Je hebt te snel achter elkaar geprobeerd. Wacht even en probeer het opnieuw.');
+      } else if (supabaseError.message?.includes('not authorized') || supabaseError.message?.includes('not allowed')) {
+        setError('Dit e-mailadres is niet geautoriseerd. Neem contact op met de beheerder.');
+      } else if (supabaseError.message?.includes('email')) {
+        setError(`E-mail kon niet worden verstuurd: ${supabaseError.message}`);
+      } else {
+        setError(`Er ging iets mis: ${supabaseError.message || 'Onbekende fout'}. Probeer het opnieuw.`);
+      }
       return;
     }
 

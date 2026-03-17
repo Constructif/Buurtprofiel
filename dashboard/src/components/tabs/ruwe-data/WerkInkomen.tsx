@@ -83,7 +83,22 @@ function calcPer1000(value: number | null, bevolking: number): number | null {
 export function WerkInkomen() {
   const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
 
-  // No selection state
+  // Alle hooks MOETEN boven early returns staan (React hooks regels)
+  const code = gebiedData?.code ?? '';
+  const defaultJaar = gebiedData?.kerncijfersJaar ?? 2025;
+
+  const kcFetcher = useCallback(
+    (jaar: number) => fetchKerncijfersForYear(code, jaar),
+    [code]
+  );
+  const kcTrendFetcher = useCallback(
+    () => fetchKerncijfersAllYears(code),
+    [code]
+  );
+
+  const inkomenCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+  const uitkeringenCard = useCardYear(defaultJaar, kcFetcher, kcTrendFetcher);
+
   if (!selectedGebied) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
@@ -92,7 +107,6 @@ export function WerkInkomen() {
     );
   }
 
-  // Loading state
   if (isLoadingData) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px' }}>
@@ -111,20 +125,6 @@ export function WerkInkomen() {
   }
 
   if (!gebiedData) return null;
-
-  // Shared fetchers — individuele hook instances per Card
-  const kcFetcher = useCallback(
-    (jaar: number) => fetchKerncijfersForYear(gebiedData.code, jaar),
-    [gebiedData.code]
-  );
-  const kcTrendFetcher = useCallback(
-    () => fetchKerncijfersAllYears(gebiedData.code),
-    [gebiedData.code]
-  );
-
-  // Individuele hook instances
-  const inkomenCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
-  const uitkeringenCard = useCardYear(gebiedData.kerncijfersJaar ?? 2025, kcFetcher, kcTrendFetcher);
 
   // Helper: extract inkomen/werk data van een card hook
   const getCardInkomen = (card: typeof inkomenCard) => {
@@ -392,9 +392,9 @@ function InkomenCard({
                   formatter={(value, name) => [`${(value as number).toFixed(1)}%`, name === 'laag' ? 'Laag inkomen' : name === 'midden' ? 'Midden inkomen' : 'Hoog inkomen']}
                   contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', fontSize: '12px' }}
                 />
-                <Bar dataKey="laag" stackId="a" fill={COLORS.red} name="Laag inkomen" />
-                <Bar dataKey="midden" stackId="a" fill={COLORS.amber} name="Midden inkomen" />
-                <Bar dataKey="hoog" stackId="a" fill={COLORS.green} name="Hoog inkomen" />
+                <Bar dataKey="laag" stackId="a" fill={COLORS.red} name="Laag inkomen" animationDuration={300} />
+                <Bar dataKey="midden" stackId="a" fill={COLORS.amber} name="Midden inkomen" animationDuration={300} />
+                <Bar dataKey="hoog" stackId="a" fill={COLORS.green} name="Hoog inkomen" animationDuration={300} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -547,7 +547,7 @@ function OpleidingsniveauCard({
                     }}
                     contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', fontSize: '12px', borderRadius: '6px' }}
                   />
-                  <Bar dataKey="value" shape={<BarWithNLLine />} maxBarSize={100} />
+                  <Bar dataKey="value" shape={<BarWithNLLine />} maxBarSize={100} animationDuration={300} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -643,6 +643,7 @@ function WerkgelegenheidCard({
                       outerRadius={50}
                       paddingAngle={2}
                       dataKey="value"
+                      animationDuration={300}
                     >
                       {werkzaamData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -776,7 +777,7 @@ function UitkeringenCard({
                     }}
                     contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', fontSize: '12px' }}
                   />
-                  <Bar dataKey="aantal" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="aantal" radius={[0, 4, 4, 0]} animationDuration={300}>
                     {barData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}

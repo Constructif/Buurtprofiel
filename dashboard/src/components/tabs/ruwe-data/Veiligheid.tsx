@@ -24,6 +24,25 @@ import {
 export function Veiligheid() {
   const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
 
+  // Alle hooks MOETEN boven early returns staan (React hooks regels)
+  const code = gebiedData?.code ?? '';
+  const defaultJaar = gebiedData?.dataJaar ?? 2025;
+
+  const crimFetcher = useCallback(
+    (jaar: number) => fetchCriminaliteitForYear(code, jaar),
+    [code]
+  );
+  const crimTrendFetcher = useCallback(
+    () => fetchCriminaliteitAllYears(code),
+    [code]
+  );
+
+  const crimCijfersCard = useCardYear(defaultJaar, crimFetcher, crimTrendFetcher);
+  const vermogenCard = useCardYear(defaultJaar, crimFetcher, crimTrendFetcher);
+  const geweldCard = useCardYear(defaultJaar, crimFetcher, crimTrendFetcher);
+  const overlastCard = useCardYear(defaultJaar, crimFetcher, crimTrendFetcher);
+  const verkeerCard = useCardYear(defaultJaar, crimFetcher, crimTrendFetcher);
+
   if (!selectedGebied) {
     return (
       <div style={{ textAlign: 'center', padding: '80px 20px', color: '#6b7280' }}>
@@ -40,23 +59,6 @@ export function Veiligheid() {
       </div>
     );
   }
-
-  // Shared fetchers (zelfde data, individuele hook instances)
-  const crimFetcher = useCallback(
-    (jaar: number) => fetchCriminaliteitForYear(gebiedData.code, jaar),
-    [gebiedData.code]
-  );
-  const crimTrendFetcher = useCallback(
-    () => fetchCriminaliteitAllYears(gebiedData.code),
-    [gebiedData.code]
-  );
-
-  // Elke Card krijgt zijn eigen hook instance
-  const crimCijfersCard = useCardYear(gebiedData.dataJaar ?? 2025, crimFetcher, crimTrendFetcher);
-  const vermogenCard = useCardYear(gebiedData.dataJaar ?? 2025, crimFetcher, crimTrendFetcher);
-  const geweldCard = useCardYear(gebiedData.dataJaar ?? 2025, crimFetcher, crimTrendFetcher);
-  const overlastCard = useCardYear(gebiedData.dataJaar ?? 2025, crimFetcher, crimTrendFetcher);
-  const verkeerCard = useCardYear(gebiedData.dataJaar ?? 2025, crimFetcher, crimTrendFetcher);
 
   // Helper: haal criminaliteit data uit een card hook
   const getCrimData = (card: typeof crimCijfersCard) => {
@@ -162,7 +164,7 @@ export function Veiligheid() {
               <div style={{ width: '160px', height: '160px', flexShrink: 0, minWidth: '160px' }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35}>
+                    <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} innerRadius={35} animationDuration={300}>
                       {chartData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
                       ))}
@@ -220,10 +222,10 @@ export function Veiligheid() {
                     const labels: Record<string, string> = { vermogen: 'Vermogen', geweld: 'Geweld', vernieling: 'Vernieling', verkeer: 'Verkeer' };
                     return labels[value] || value;
                   }} />
-                  <Line type="monotone" dataKey="vermogen" stroke="#eb6608" strokeWidth={2} dot={{ fill: '#eb6608', r: 3 }} />
-                  <Line type="monotone" dataKey="geweld" stroke="#e74c3c" strokeWidth={2} dot={{ fill: '#e74c3c', r: 3 }} />
-                  <Line type="monotone" dataKey="vernieling" stroke="#3498db" strokeWidth={2} dot={{ fill: '#3498db', r: 3 }} />
-                  <Line type="monotone" dataKey="verkeer" stroke="#f39c12" strokeWidth={2} dot={{ fill: '#f39c12', r: 3 }} />
+                  <Line type="monotone" dataKey="vermogen" stroke="#eb6608" strokeWidth={2} dot={{ fill: '#eb6608', r: 3 }} animationDuration={300} />
+                  <Line type="monotone" dataKey="geweld" stroke="#e74c3c" strokeWidth={2} dot={{ fill: '#e74c3c', r: 3 }} animationDuration={300} />
+                  <Line type="monotone" dataKey="vernieling" stroke="#3498db" strokeWidth={2} dot={{ fill: '#3498db', r: 3 }} animationDuration={300} />
+                  <Line type="monotone" dataKey="verkeer" stroke="#f39c12" strokeWidth={2} dot={{ fill: '#f39c12', r: 3 }} animationDuration={300} />
                 </LineChart>
               </ResponsiveContainer>
             </div>

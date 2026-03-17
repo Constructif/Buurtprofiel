@@ -5,39 +5,41 @@ import type {
   ZorgVergelijkingNiveau,
 } from '../types/zorgWelzijn';
 import { supabase } from './supabase';
+import { rateLimitedQuery } from '../utils/rateLimiter';
 
 /**
  * Fetch RIVM zorg/welzijn data voor een specifieke regio uit Supabase
  */
 async function fetchRIVMFromSupabase(code: string, jaar?: number) {
-  if (jaar) {
-    // Probeer exact jaar eerst
-    const { data } = await supabase
+  return rateLimitedQuery(`rivm-${code}-${jaar ?? 'latest'}`, async () => {
+    if (jaar) {
+      const { data } = await supabase
+        .from('rivm_gezondheid')
+        .select('*')
+        .eq('code', code)
+        .eq('jaar', jaar)
+        .maybeSingle();
+      if (data) return data;
+    }
+
+    const { data, error } = await supabase
       .from('rivm_gezondheid')
       .select('*')
       .eq('code', code)
-      .eq('jaar', jaar)
+      .order('jaar', { ascending: false })
+      .limit(1)
       .maybeSingle();
-    if (data) return data;
-  }
 
-  // Fallback: meest recente jaar (of als geen jaar opgegeven)
-  const { data, error } = await supabase
-    .from('rivm_gezondheid')
-    .select('*')
-    .eq('code', code)
-    .order('jaar', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error || !data) return null;
-  return data;
+    if (error || !data) return null;
+    return data;
+  });
 }
 
 /**
  * Fetch trend data (alle jaren) voor een regio
  */
 export async function fetchRIVMTrendData(regioCode: string): Promise<ZorgTrend> {
+  return rateLimitedQuery(`rivm-trend-${regioCode}`, async () => {
   try {
     const { data, error } = await supabase
       .from('rivm_gezondheid')
@@ -58,6 +60,7 @@ export async function fetchRIVMTrendData(regioCode: string): Promise<ZorgTrend> 
   } catch {
     return { jaren: [] };
   }
+  });
 }
 
 /**

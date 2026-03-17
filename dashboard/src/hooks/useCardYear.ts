@@ -95,7 +95,7 @@ export function useCardYear<T>(
       trendCacheRef.current = data;
       const jaren = data.map((d) => d.jaar as number).filter(Boolean);
       setYearsWithData(jaren);
-    }).catch(() => { /* stille fout */ });
+    }).catch((err) => { console.warn('Trend data laden mislukt:', err); });
 
     return () => { cancelled = true; };
   }, [trendFetcher, selectedGebied?.code]);

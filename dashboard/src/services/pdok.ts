@@ -1,7 +1,14 @@
+import { rateLimitedFetch, deduplicate } from '../utils/rateLimiter';
+
 const PDOK_BASE_2024 = 'https://api.pdok.nl/cbs/wijken-en-buurten-2024/ogc/v1';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function fetchGeometry(code: string): Promise<any | null> {
+  return deduplicate(`pdok-geo-${code}`, () => _fetchGeometry(code));
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function _fetchGeometry(code: string): Promise<any | null> {
   let collectionName: string;
   let possiblePropertyNames: string[];
 
@@ -23,7 +30,7 @@ export async function fetchGeometry(code: string): Promise<any | null> {
     const url = `${PDOK_BASE_2024}/collections/${collectionName}/items?${propName}=${code}`;
 
     try {
-      const response = await fetch(url);
+      const response = await rateLimitedFetch(url);
       if (response.ok) {
         const data = await response.json();
         if (data.features && data.features.length > 0) {
@@ -43,7 +50,7 @@ export async function fetchGeometry(code: string): Promise<any | null> {
   for (const propName of ['statcode', 'code']) {
     const url = `${fallbackBase}/collections/${fallbackCollection}/items?${propName}=${code}`;
     try {
-      const response = await fetch(url);
+      const response = await rateLimitedFetch(url);
       if (response.ok) {
         const data = await response.json();
         if (data.features && data.features.length > 0) {

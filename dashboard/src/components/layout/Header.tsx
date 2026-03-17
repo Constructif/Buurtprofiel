@@ -26,13 +26,31 @@ export function Header() {
           </div>
 
           {/* Titel - midden */}
-          <div className="header-title" style={{ textAlign: 'center', flexShrink: 0 }}>
+          <div className="header-title" style={{ textAlign: 'center', flexShrink: 0, display: 'flex', alignItems: 'center', gap: '12px' }}>
             <h1 style={{ fontSize: '20px', fontWeight: 700, letterSpacing: '0.02em', margin: 0 }}>
               Buurtprofiel
             </h1>
+            {/* Mobiele logout knop — alleen zichtbaar op kleine schermen */}
+            <button
+              className="header-mobile-logout"
+              onClick={() => supabase.auth.signOut()}
+              style={{
+                display: 'none',
+                background: 'none',
+                border: '1px solid rgba(255,255,255,0.4)',
+                color: 'white',
+                cursor: 'pointer',
+                padding: '4px 10px',
+                fontSize: '11px',
+                borderRadius: '4px',
+              }}
+              title={user?.email || 'Uitloggen'}
+            >
+              Uitloggen
+            </button>
           </div>
 
-          {/* Selected area info + user - rechts */}
+          {/* Selected area info + user - rechts (verborgen op mobiel) */}
           <div className="header-selected" style={{ width: '320px', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '12px' }}>
             {selectedGebied && (
               <div style={{

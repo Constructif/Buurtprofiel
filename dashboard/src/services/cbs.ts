@@ -1,6 +1,7 @@
 import type { Gebied, GebiedData, CriminaliteitTrend, VeiligheidsScoreVergelijking, BevolkingsDynamiek, HerkomstLandData } from '../types/gebied';
 import type { OpleidingsniveauData, WerkgelegenheidData, UitkeringenData } from '../types/werkInkomen';
 import { supabase } from './supabase';
+import { rateLimitedQuery } from '../utils/rateLimiter';
 
 // Default jaar voor queries (meest recente beschikbare data)
 const DEFAULT_JAAR = 2025;
@@ -9,6 +10,7 @@ const WERKGELEGENHEID_JAAR = 2023; // 2024 dataset heeft geen werkgelegenheidsda
 // Laad alleen actieve gebiedscodes (buurten, wijken, gemeenten) uit Supabase
 // Gebruikt RPC functie die filtert op gebieden die in kerncijfers bestaan voor het meest recente jaar
 export async function loadAllGebieden(): Promise<Gebied[]> {
+  return rateLimitedQuery('gebieden-all', async () => {
   let allGebieden: Gebied[] = [];
   let from = 0;
   const PAGE_SIZE = 1000;
@@ -38,6 +40,7 @@ export async function loadAllGebieden(): Promise<Gebied[]> {
   }
 
   return allGebieden;
+  });
 }
 
 // Bouw uitkeringen data uit kerncijfers JSONB + bereken per 1000
@@ -62,6 +65,10 @@ function buildUitkeringen(kerncijfers: any, bevolking: number): UitkeringenData 
 // Haal CBS kerncijfers op voor een gebied uit Supabase
 export async function fetchCBSData(code: string, naam: string, gebied?: Gebied, jaar?: number): Promise<GebiedData> {
   const targetJaar = jaar ?? DEFAULT_JAAR;
+  return rateLimitedQuery(`cbs-${code}-${targetJaar}`, () => _fetchCBSData(code, naam, gebied, targetJaar));
+}
+
+async function _fetchCBSData(code: string, naam: string, gebied: Gebied | undefined, targetJaar: number): Promise<GebiedData> {
   // Opleiding en werkgelegenheid: max 2023 (nieuwere data niet beschikbaar)
   const opleidingJaar = Math.min(targetJaar, 2023);
   const werkJaar = Math.min(targetJaar, WERKGELEGENHEID_JAAR);
@@ -270,6 +277,7 @@ export async function fetchCBSData(code: string, naam: string, gebied?: Gebied, 
 
 // Haal criminaliteitstrend op (alle jaren)
 export async function fetchCriminaliteitTrend(code: string): Promise<CriminaliteitTrend> {
+  return rateLimitedQuery(`crim-trend-${code}`, async () => {
   try {
     const { data, error } = await supabase
       .from('criminaliteit')
@@ -295,6 +303,7 @@ export async function fetchCriminaliteitTrend(code: string): Promise<Criminalite
   } catch {
     return { jaren: [] };
   }
+  });
 }
 
 // Bereken veiligheidsscore op basis van gewogen criminaliteit

@@ -306,6 +306,7 @@ export function ZorgWelzijn() {
                     strokeWidth={2}
                     dot={{ fill: '#eb6608', r: 3 }}
                     connectNulls
+                    animationDuration={300}
                   />
                   <Line
                     type="monotone"
@@ -315,6 +316,7 @@ export function ZorgWelzijn() {
                     strokeWidth={2}
                     dot={{ fill: '#ef4444', r: 3 }}
                     connectNulls
+                    animationDuration={300}
                   />
                 </LineChart>
               </ResponsiveContainer>

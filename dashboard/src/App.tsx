@@ -9,11 +9,20 @@ import { EigenOnderzoekPlaceholder } from './components/tabs/eigen-onderzoek/Pla
 import { useAuth } from './hooks/useAuth';
 import { useAuthStore } from './store/authStore';
 import { LoginPage } from './components/auth/LoginPage';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 function App() {
   useAuth();
   const { session, isLoading: isAuthLoading } = useAuthStore();
-  const { mainTab, subTab, selectedJaar, selectedGebied, setGebiedData, setGemeenteData, setIsLoadingData } = useGebiedStore();
+
+  // Granulaire selectors — voorkomt onnodige re-renders
+  const mainTab = useGebiedStore(s => s.mainTab);
+  const subTab = useGebiedStore(s => s.subTab);
+  const selectedJaar = useGebiedStore(s => s.selectedJaar);
+  const selectedGebied = useGebiedStore(s => s.selectedGebied);
+  const setGebiedData = useGebiedStore(s => s.setGebiedData);
+  const setGemeenteData = useGebiedStore(s => s.setGemeenteData);
+
   const prevJaarRef = useRef(selectedJaar);
 
   // Refetch data wanneer jaar verandert en er een gebied geselecteerd is
@@ -44,7 +53,7 @@ function App() {
       });
 
     return () => { cancelled = true; };
-  }, [selectedJaar, selectedGebied, setGebiedData, setGemeenteData, setIsLoadingData]);
+  }, [selectedJaar, selectedGebied, setGebiedData, setGemeenteData]);
 
   const renderContent = () => {
     if (mainTab === 'eigen-onderzoek') {
@@ -86,6 +95,9 @@ function App() {
     return <LoginPage />;
   }
 
+  // Tab key voor fade-transitie bij wissel
+  const tabKey = mainTab === 'eigen-onderzoek' ? 'eigen-onderzoek' : subTab;
+
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f1ee' }}>
       <Header />
@@ -96,7 +108,11 @@ function App() {
           <SubTabs />
         </div>
 
-        <div style={{ marginTop: '20px' }}>{renderContent()}</div>
+        <div className="tab-content" key={tabKey} style={{ marginTop: '20px' }}>
+          <ErrorBoundary key={tabKey}>
+            {renderContent()}
+          </ErrorBoundary>
+        </div>
       </main>
     </div>
   );
