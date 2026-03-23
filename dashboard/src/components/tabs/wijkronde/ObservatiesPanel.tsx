@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { fetchObservaties, deleteObservatie } from '../../../services/wijkronde';
+import { fetchObservaties, deleteObservatie, refreshFotoUrls } from '../../../services/wijkronde';
 import type { Wijkobservatie } from '../../../types/wijkronde';
 import { CATEGORIE_KLEUREN } from '../../../types/wijkronde';
 import { ObservatieMap } from './ObservatieMap';
@@ -21,6 +21,18 @@ export function ObservatiesPanel() {
     setLoading(true);
     try {
       const data = await fetchObservaties(actieveRonde.id);
+
+      // Vernieuw signed URLs voor foto's
+      const paths = data.filter(o => o.foto_path).map(o => o.foto_path!);
+      if (paths.length > 0) {
+        const freshUrls = await refreshFotoUrls(paths);
+        for (const obs of data) {
+          if (obs.foto_path && freshUrls[obs.foto_path]) {
+            obs.foto_url = freshUrls[obs.foto_path];
+          }
+        }
+      }
+
       setObservaties(data);
     } catch (error) {
       console.error('Fout bij laden observaties:', error);

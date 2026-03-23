@@ -119,11 +119,36 @@ export async function uploadFoto(
 
   if (error) throw error;
 
-  const { data: urlData } = supabase.storage
+  // Signed URL: 1 uur geldig, alleen voor ingelogde gebruikers
+  const { data: signedData, error: signError } = await supabase.storage
     .from('wijkfotos')
-    .getPublicUrl(path);
+    .createSignedUrl(path, 3600);
 
-  return { url: urlData.publicUrl, path };
+  if (signError || !signedData?.signedUrl) throw signError || new Error('Signed URL mislukt');
+
+  return { url: signedData.signedUrl, path };
+}
+
+/**
+ * Vernieuw signed URLs voor foto's (als ze verlopen zijn).
+ * Geeft een map terug van path → nieuwe signed URL.
+ */
+export async function refreshFotoUrls(paths: string[]): Promise<Record<string, string>> {
+  if (paths.length === 0) return {};
+
+  const { data, error } = await supabase.storage
+    .from('wijkfotos')
+    .createSignedUrls(paths, 3600);
+
+  if (error || !data) return {};
+
+  const result: Record<string, string> = {};
+  for (const item of data) {
+    if (item.signedUrl && item.path) {
+      result[item.path] = item.signedUrl;
+    }
+  }
+  return result;
 }
 
 // ── Antwoorden ──────────────────────────────────────────
