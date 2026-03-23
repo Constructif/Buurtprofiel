@@ -85,19 +85,41 @@ interface GebiedStore {
   setActieveRonde: (ronde: Wijkronde | null) => void;
 }
 
+// ── LocalStorage helpers ────────────────────────────────
+function loadFromStorage<T>(key: string): T | null {
+  try {
+    const val = localStorage.getItem(key);
+    return val ? JSON.parse(val) : null;
+  } catch { return null; }
+}
+
+function saveToStorage(key: string, value: unknown) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* ignore */ }
+}
+
+function removeFromStorage(key: string) {
+  try { localStorage.removeItem(key); } catch { /* ignore */ }
+}
+
 export const useGebiedStore = create<GebiedStore>((set, get) => ({
   allGebieden: [],
   setAllGebieden: (gebieden) => set({ allGebieden: gebieden }),
 
-  selectedGebied: null,
-  setSelectedGebied: (gebied) => set({ selectedGebied: gebied }),
-  clearSelectedGebied: () => set({
-    selectedGebied: null,
-    gebiedData: null,
-    gemeenteData: null,
-    dataCache: new Map(),
-    gemeenteDataCache: new Map(),
-  }),
+  selectedGebied: loadFromStorage('bp_selectedGebied'),
+  setSelectedGebied: (gebied) => {
+    saveToStorage('bp_selectedGebied', gebied);
+    set({ selectedGebied: gebied });
+  },
+  clearSelectedGebied: () => {
+    removeFromStorage('bp_selectedGebied');
+    set({
+      selectedGebied: null,
+      gebiedData: null,
+      gemeenteData: null,
+      dataCache: new Map(),
+      gemeenteDataCache: new Map(),
+    });
+  },
 
   gebiedData: null,
   setGebiedData: (data) => set({ gebiedData: data }),
@@ -281,17 +303,23 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
   isLoadingData: false,
   setIsLoadingData: (loading) => set({ isLoadingData: loading }),
 
-  mainTab: 'ruwe-data',
+  mainTab: (loadFromStorage<string>('bp_mainTab') as 'ruwe-data' | 'wijkronde' | 'nader-onderzoek') || 'ruwe-data',
   setMainTab: (tab) => {
     const defaultSubTabs: Record<string, string> = {
       'ruwe-data': 'overzicht',
       'wijkronde': 'observaties',
       'nader-onderzoek': '',
     };
-    set({ mainTab: tab, subTab: defaultSubTabs[tab] || '' });
+    const newSubTab = defaultSubTabs[tab] || '';
+    saveToStorage('bp_mainTab', tab);
+    saveToStorage('bp_subTab', newSubTab);
+    set({ mainTab: tab, subTab: newSubTab });
   },
-  subTab: 'overzicht',
-  setSubTab: (tab) => set({ subTab: tab }),
+  subTab: loadFromStorage<string>('bp_subTab') || 'overzicht',
+  setSubTab: (tab) => {
+    saveToStorage('bp_subTab', tab);
+    set({ subTab: tab });
+  },
 
   actieveRonde: null,
   setActieveRonde: (ronde) => set({ actieveRonde: ronde }),
