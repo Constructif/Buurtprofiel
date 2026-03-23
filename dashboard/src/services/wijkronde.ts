@@ -121,7 +121,8 @@ export async function updateObservatie(
 /** Genereer een publieke URL voor een foto path (bucket moet public zijn) */
 export function getFotoPublicUrl(path: string): string {
   const { data } = supabase.storage.from('wijkfotos').getPublicUrl(path);
-  return data.publicUrl;
+  // Cache-busting: voorkom dat browser oude 404 responses cached
+  return data.publicUrl + '?t=' + Date.now();
 }
 
 export async function uploadFoto(
