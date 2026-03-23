@@ -65,7 +65,7 @@ export function Header() {
               Uitloggen
             </button>
             {user?.email && (
-              <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)' }}>
+              <span className="header-email" style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)' }}>
                 {user.email}
               </span>
             )}

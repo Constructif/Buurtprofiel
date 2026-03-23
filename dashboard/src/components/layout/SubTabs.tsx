@@ -13,8 +13,8 @@ const ruweDataTabs = [
 ];
 
 const wijkrondeTabs = [
-  { id: 'vragen', label: 'Vragen' },
   { id: 'observaties', label: 'Observaties' },
+  { id: 'vragen', label: 'Vragen' },
 ];
 
 function BenchmarkToggle() {

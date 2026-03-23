@@ -111,6 +111,10 @@ body {
   .header-layout h1 {
     font-size: 16px !important;
   }
+
+  .header-email {
+    display: none !important;
+  }
 }
 
 /* Main tabs mobile */
@@ -121,9 +125,10 @@ body {
 
   .main-tabs button {
     flex: 1;
-    padding: 6px 8px !important;
-    font-size: 11px !important;
-    line-height: 1.2 !important;
+    padding: 10px 8px !important;
+    font-size: 12px !important;
+    line-height: 1.3 !important;
+    min-height: 44px !important;
   }
 }
 
@@ -149,6 +154,14 @@ body {
 
   .sub-tabs-controls-mobile {
     display: flex !important;
+  }
+
+  .year-selector-desktop {
+    display: none !important;
+  }
+
+  .year-selector-mobile {
+    display: block !important;
   }
 }
 

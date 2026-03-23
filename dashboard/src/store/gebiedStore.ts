@@ -285,7 +285,7 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
   setMainTab: (tab) => {
     const defaultSubTabs: Record<string, string> = {
       'ruwe-data': 'overzicht',
-      'wijkronde': 'vragen',
+      'wijkronde': 'observaties',
       'nader-onderzoek': '',
     };
     set({ mainTab: tab, subTab: defaultSubTabs[tab] || '' });

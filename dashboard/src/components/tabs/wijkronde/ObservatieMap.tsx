@@ -1,10 +1,36 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, GeoJSON, CircleMarker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import L from 'leaflet';
 import type { Map as LeafletMap, GeoJSON as LeafletGeoJSON } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchGeometry } from '../../../services/pdok';
 import type { Wijkobservatie } from '../../../types/wijkronde';
-import { CATEGORIE_KLEUREN } from '../../../types/wijkronde';
+import { CATEGORIE_KLEUREN, type ObservatieCategorie } from '../../../types/wijkronde';
+
+// SVG pin icon factory
+function createPinIcon(color: string) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="40" viewBox="0 0 28 40">
+    <path d="M14 0C6.27 0 0 6.27 0 14c0 10.5 14 26 14 26s14-15.5 14-26C28 6.27 21.73 0 14 0z" fill="${color}" stroke="#fff" stroke-width="2"/>
+    <circle cx="14" cy="14" r="6" fill="#fff"/>
+  </svg>`;
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [28, 40],
+    iconAnchor: [14, 40],
+    popupAnchor: [0, -40],
+  });
+}
+
+// Cache icons per category
+const pinIcons: Record<string, L.DivIcon> = {};
+function getPinIcon(categorie: ObservatieCategorie) {
+  const color = CATEGORIE_KLEUREN[categorie];
+  if (!pinIcons[color]) {
+    pinIcons[color] = createPinIcon(color);
+  }
+  return pinIcons[color];
+}
 
 // Fit kaart op geometrie
 function MapController({ geometry }: { geometry: GeoJSON.Feature | null }) {
@@ -27,10 +53,10 @@ function MapController({ geometry }: { geometry: GeoJSON.Feature | null }) {
       ref={geoJsonRef}
       data={geometry}
       style={{
-        color: '#f97316',
+        color: '#eb6608',
         weight: 3,
-        fillColor: '#f97316',
-        fillOpacity: 0.1,
+        fillColor: '#eb6608',
+        fillOpacity: 0.08,
       }}
     />
   );
@@ -77,7 +103,9 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
   return (
     <div style={{
       width: '100%',
-      height: '400px',
+      height: '55vh',
+      minHeight: '350px',
+      maxHeight: '600px',
       borderRadius: '12px',
       overflow: 'hidden',
       border: '1px solid #e5e7eb',
@@ -85,20 +113,13 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
     }}>
       {loading && (
         <div style={{
-          position: 'absolute',
-          inset: 0,
-          backgroundColor: 'rgba(255,255,255,0.8)',
-          zIndex: 10,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
+          position: 'absolute', inset: 0,
+          backgroundColor: 'rgba(255,255,255,0.8)', zIndex: 10,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <div className="animate-spin" style={{
-            width: '32px',
-            height: '32px',
-            border: '4px solid #eb6608',
-            borderTopColor: 'transparent',
-            borderRadius: '50%',
+            width: '32px', height: '32px',
+            border: '4px solid #eb6608', borderTopColor: 'transparent', borderRadius: '50%',
           }} />
         </div>
       )}
@@ -117,16 +138,10 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
         <ClickHandler onMapClick={onMapClick} />
 
         {observaties.map((obs) => (
-          <CircleMarker
+          <Marker
             key={obs.id}
-            center={[obs.lat, obs.lng]}
-            radius={10}
-            pathOptions={{
-              color: CATEGORIE_KLEUREN[obs.categorie],
-              fillColor: CATEGORIE_KLEUREN[obs.categorie],
-              fillOpacity: 0.8,
-              weight: 2,
-            }}
+            position={[obs.lat, obs.lng]}
+            icon={getPinIcon(obs.categorie)}
           >
             <Popup>
               <div style={{ maxWidth: '220px' }}>
@@ -138,11 +153,8 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
                     src={obs.foto_url}
                     alt="Observatie"
                     style={{
-                      width: '100%',
-                      borderRadius: '6px',
-                      marginTop: '6px',
-                      maxHeight: '150px',
-                      objectFit: 'cover',
+                      width: '100%', borderRadius: '6px',
+                      marginTop: '6px', maxHeight: '150px', objectFit: 'cover',
                     }}
                   />
                 )}
@@ -156,7 +168,7 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
                 </p>
               </div>
             </Popup>
-          </CircleMarker>
+          </Marker>
         ))}
       </MapContainer>
     </div>
