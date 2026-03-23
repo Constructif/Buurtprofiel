@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { fetchObservaties, deleteObservatie, refreshFotoUrls } from '../../../services/wijkronde';
+import { fetchObservaties, refreshFotoUrls } from '../../../services/wijkronde';
 import type { Wijkobservatie } from '../../../types/wijkronde';
-import { CATEGORIE_KLEUREN } from '../../../types/wijkronde';
+import { CATEGORIE_KLEUREN, parseFotoPaths } from '../../../types/wijkronde';
 import { ObservatieMap } from './ObservatieMap';
 import { ObservatieForm } from './ObservatieForm';
+import { ObservatieDetail } from './ObservatieDetail';
 
 export function ObservatiesPanel() {
   const selectedGebied = useGebiedStore((s) => s.selectedGebied);
@@ -13,8 +14,7 @@ export function ObservatiesPanel() {
   const [observaties, setObservaties] = useState<Wijkobservatie[]>([]);
   const [loading, setLoading] = useState(false);
   const [formCoords, setFormCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [confirmDeleteObs, setConfirmDeleteObs] = useState<string | null>(null);
-  const [deletingObs, setDeletingObs] = useState<string | null>(null);
+  const [selectedObs, setSelectedObs] = useState<Wijkobservatie | null>(null);
 
   const loadObservaties = useCallback(async () => {
     if (!actieveRonde) return;
@@ -22,13 +22,21 @@ export function ObservatiesPanel() {
     try {
       const data = await fetchObservaties(actieveRonde.id);
 
-      // Vernieuw signed URLs voor foto's
-      const paths = data.filter(o => o.foto_path).map(o => o.foto_path!);
-      if (paths.length > 0) {
-        const freshUrls = await refreshFotoUrls(paths);
+      // Verzamel alle unieke foto paths (inclusief multi-foto JSON arrays)
+      const allPaths: string[] = [];
+      for (const obs of data) {
+        const paths = parseFotoPaths(obs.foto_path);
+        allPaths.push(...paths);
+      }
+
+      // Vernieuw signed URLs voor alle foto's in één batch
+      if (allPaths.length > 0) {
+        const freshUrls = await refreshFotoUrls(allPaths);
         for (const obs of data) {
-          if (obs.foto_path && freshUrls[obs.foto_path]) {
-            obs.foto_url = freshUrls[obs.foto_path];
+          const paths = parseFotoPaths(obs.foto_path);
+          if (paths.length > 0 && freshUrls[paths[0]]) {
+            // Eerste foto als thumbnail URL
+            obs.foto_url = freshUrls[paths[0]];
           }
         }
       }
@@ -64,19 +72,6 @@ export function ObservatiesPanel() {
     loadObservaties();
   };
 
-  const handleDeleteObs = async (id: string) => {
-    setDeletingObs(id);
-    try {
-      await deleteObservatie(id);
-      setConfirmDeleteObs(null);
-      loadObservaties();
-    } catch (error) {
-      console.error('Fout bij verwijderen observatie:', error);
-    } finally {
-      setDeletingObs(null);
-    }
-  };
-
   return (
     <div>
       {/* Kaart */}
@@ -100,8 +95,9 @@ export function ObservatiesPanel() {
           </h4>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
             {observaties.map((obs) => (
-              <div
+              <button
                 key={obs.id}
+                onClick={() => setSelectedObs(obs)}
                 style={{
                   display: 'flex',
                   gap: '12px',
@@ -110,6 +106,9 @@ export function ObservatiesPanel() {
                   borderRadius: '8px',
                   border: '1px solid #e5e7eb',
                   alignItems: 'flex-start',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                  width: '100%',
                 }}
               >
                 {obs.foto_url && (
@@ -147,47 +146,11 @@ export function ObservatiesPanel() {
                     {new Date(obs.created_at).toLocaleString('nl-NL')}
                   </p>
                 </div>
-                {/* Verwijderknop */}
-                <div style={{ flexShrink: 0 }}>
-                  {confirmDeleteObs === obs.id ? (
-                    <div style={{ display: 'flex', gap: '4px' }}>
-                      <button
-                        onClick={() => handleDeleteObs(obs.id)}
-                        disabled={deletingObs === obs.id}
-                        style={{
-                          padding: '4px 8px', fontSize: '11px', fontWeight: 600,
-                          border: 'none', borderRadius: '4px',
-                          backgroundColor: '#c0392b', color: '#fff',
-                          cursor: deletingObs === obs.id ? 'default' : 'pointer',
-                        }}
-                      >
-                        {deletingObs === obs.id ? '...' : 'Ja'}
-                      </button>
-                      <button
-                        onClick={() => setConfirmDeleteObs(null)}
-                        style={{
-                          padding: '4px 8px', fontSize: '11px',
-                          border: '1px solid #d1d5db', borderRadius: '4px',
-                          backgroundColor: '#fff', color: '#374151', cursor: 'pointer',
-                        }}
-                      >
-                        Nee
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setConfirmDeleteObs(obs.id)}
-                      style={{
-                        padding: '4px 8px', fontSize: '11px',
-                        border: '1px solid #e5c7c4', borderRadius: '4px',
-                        backgroundColor: '#fff', color: '#c0392b', cursor: 'pointer',
-                      }}
-                    >
-                      X
-                    </button>
-                  )}
-                </div>
-              </div>
+                {/* Pijltje rechts */}
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" style={{ flexShrink: 0, alignSelf: 'center' }}>
+                  <path d="M9 18l6-6-6-6" />
+                </svg>
+              </button>
             ))}
           </div>
         </div>
@@ -206,6 +169,18 @@ export function ObservatiesPanel() {
           lng={formCoords.lng}
           onClose={() => setFormCoords(null)}
           onSaved={handleFormSaved}
+        />
+      )}
+
+      {/* Detail/bewerkscherm */}
+      {selectedObs && (
+        <ObservatieDetail
+          observatie={selectedObs}
+          onClose={() => setSelectedObs(null)}
+          onUpdated={() => {
+            setSelectedObs(null);
+            loadObservaties();
+          }}
         />
       )}
     </div>

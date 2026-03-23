@@ -71,12 +71,10 @@ export function ObservatieForm({ buurtcode, rondeId, lat, lng, onClose, onSaved 
     setError(null);
 
     try {
-      let foto_url: string | null = null;
       let foto_path: string | null = null;
 
       if (fotoBlob) {
         const result = await uploadFoto(buurtcode, rondeId, fotoBlob);
-        foto_url = result.url;
         foto_path = result.path;
       }
 
@@ -86,7 +84,7 @@ export function ObservatieForm({ buurtcode, rondeId, lat, lng, onClose, onSaved 
         lng,
         categorie,
         opmerking: opmerking.trim() || null,
-        foto_url,
+        foto_url: null,
         foto_path,
         ronde_id: rondeId,
       });

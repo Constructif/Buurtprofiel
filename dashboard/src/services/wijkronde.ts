@@ -100,13 +100,29 @@ export async function deleteObservatie(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function updateObservatie(
+  id: string,
+  params: {
+    categorie?: ObservatieCategorie;
+    opmerking?: string | null;
+    foto_path?: string | null;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from('wijkobservaties')
+    .update(params)
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
 // ── Foto upload ─────────────────────────────────────────
 
 export async function uploadFoto(
   buurtcode: string,
   rondeId: string,
   blob: Blob,
-): Promise<{ url: string; path: string }> {
+): Promise<{ path: string }> {
   const timestamp = Date.now();
   const path = `${buurtcode}/${rondeId}/${timestamp}.jpg`;
 
@@ -119,14 +135,15 @@ export async function uploadFoto(
 
   if (error) throw error;
 
-  // Signed URL: 1 uur geldig, alleen voor ingelogde gebruikers
-  const { data: signedData, error: signError } = await supabase.storage
+  return { path };
+}
+
+export async function deleteFoto(path: string): Promise<void> {
+  const { error } = await supabase.storage
     .from('wijkfotos')
-    .createSignedUrl(path, 3600);
+    .remove([path]);
 
-  if (signError || !signedData?.signedUrl) throw signError || new Error('Signed URL mislukt');
-
-  return { url: signedData.signedUrl, path };
+  if (error) throw error;
 }
 
 /**

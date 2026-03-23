@@ -33,6 +33,23 @@ export interface Wijkobservatie {
   created_at: string;
 }
 
+/** Parse foto_path als JSON array of enkele waarde */
+export function parseFotoPaths(fotoPad: string | null): string[] {
+  if (!fotoPad) return [];
+  try {
+    const parsed = JSON.parse(fotoPad);
+    if (Array.isArray(parsed)) return parsed;
+  } catch { /* niet JSON, enkele waarde */ }
+  return [fotoPad];
+}
+
+/** Serialize foto paths naar JSON string */
+export function serializeFotoPaths(paths: string[]): string | null {
+  if (paths.length === 0) return null;
+  if (paths.length === 1) return paths[0];
+  return JSON.stringify(paths);
+}
+
 export interface WijkrondeAntwoord {
   id: string;
   buurtcode: string;
