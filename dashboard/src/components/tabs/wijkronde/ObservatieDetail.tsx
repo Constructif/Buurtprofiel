@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { Wijkobservatie, ObservatieCategorie } from '../../../types/wijkronde';
 import { CATEGORIEEN, CATEGORIE_KLEUREN, parseFotoPaths, serializeFotoPaths } from '../../../types/wijkronde';
 import { compressImage } from '../../../utils/imageCompress';
-import { uploadFoto, deleteFoto, updateObservatie, deleteObservatie, refreshFotoUrls } from '../../../services/wijkronde';
+import { uploadFoto, deleteFoto, updateObservatie, deleteObservatie, getFotoPublicUrl } from '../../../services/wijkronde';
 
 interface ObservatieDetailProps {
   observatie: Wijkobservatie;
@@ -28,20 +28,11 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
   const [fullscreenFoto, setFullscreenFoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load foto signed URLs
+  // Load foto public URLs
   useEffect(() => {
-    async function loadFotos() {
-      const paths = parseFotoPaths(observatie.foto_path);
-      if (paths.length === 0) {
-        setFotos([]);
-        setLoadingFotos(false);
-        return;
-      }
-      const urls = await refreshFotoUrls(paths);
-      setFotos(paths.map(p => ({ path: p, url: urls[p] || '' })));
-      setLoadingFotos(false);
-    }
-    loadFotos();
+    const paths = parseFotoPaths(observatie.foto_path);
+    setFotos(paths.map(p => ({ path: p, url: getFotoPublicUrl(p) })));
+    setLoadingFotos(false);
   }, [observatie.foto_path]);
 
   // Lock body scroll
@@ -60,11 +51,7 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
     setError(null);
     try {
       const compressed = await compressImage(file);
-      const { path } = await uploadFoto(observatie.buurtcode, observatie.ronde_id, compressed);
-
-      // Get signed URL for preview
-      const urls = await refreshFotoUrls([path]);
-      const url = urls[path] || '';
+      const { url, path } = await uploadFoto(observatie.buurtcode, observatie.ronde_id, compressed);
 
       const newFotos = [...fotos, { path, url }];
       setFotos(newFotos);

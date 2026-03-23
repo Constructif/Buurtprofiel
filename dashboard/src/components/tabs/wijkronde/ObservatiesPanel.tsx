@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { fetchObservaties, refreshFotoUrls } from '../../../services/wijkronde';
+import { fetchObservaties, getFotoPublicUrl } from '../../../services/wijkronde';
 import type { Wijkobservatie } from '../../../types/wijkronde';
 import { CATEGORIE_KLEUREN, parseFotoPaths } from '../../../types/wijkronde';
 import { ObservatieMap } from './ObservatieMap';
@@ -22,22 +22,11 @@ export function ObservatiesPanel() {
     try {
       const data = await fetchObservaties(actieveRonde.id);
 
-      // Verzamel alle unieke foto paths (inclusief multi-foto JSON arrays)
-      const allPaths: string[] = [];
+      // Genereer public URL voor eerste foto als thumbnail
       for (const obs of data) {
         const paths = parseFotoPaths(obs.foto_path);
-        allPaths.push(...paths);
-      }
-
-      // Vernieuw signed URLs voor alle foto's in één batch
-      if (allPaths.length > 0) {
-        const freshUrls = await refreshFotoUrls(allPaths);
-        for (const obs of data) {
-          const paths = parseFotoPaths(obs.foto_path);
-          if (paths.length > 0 && freshUrls[paths[0]]) {
-            // Eerste foto als thumbnail URL
-            obs.foto_url = freshUrls[paths[0]];
-          }
+        if (paths.length > 0) {
+          obs.foto_url = getFotoPublicUrl(paths[0]);
         }
       }
 

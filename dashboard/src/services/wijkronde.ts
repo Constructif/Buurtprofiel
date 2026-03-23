@@ -116,13 +116,19 @@ export async function updateObservatie(
   if (error) throw error;
 }
 
-// ── Foto upload ─────────────────────────────────────────
+// ── Foto's ──────────────────────────────────────────────
+
+/** Genereer een publieke URL voor een foto path (bucket moet public zijn) */
+export function getFotoPublicUrl(path: string): string {
+  const { data } = supabase.storage.from('wijkfotos').getPublicUrl(path);
+  return data.publicUrl;
+}
 
 export async function uploadFoto(
   buurtcode: string,
   rondeId: string,
   blob: Blob,
-): Promise<{ path: string }> {
+): Promise<{ url: string; path: string }> {
   const timestamp = Date.now();
   const path = `${buurtcode}/${rondeId}/${timestamp}.jpg`;
 
@@ -135,7 +141,7 @@ export async function uploadFoto(
 
   if (error) throw error;
 
-  return { path };
+  return { url: getFotoPublicUrl(path), path };
 }
 
 export async function deleteFoto(path: string): Promise<void> {
@@ -144,46 +150,6 @@ export async function deleteFoto(path: string): Promise<void> {
     .remove([path]);
 
   if (error) throw error;
-}
-
-/**
- * Vernieuw signed URLs voor foto's (als ze verlopen zijn).
- * Geeft een map terug van path → nieuwe signed URL.
- */
-export async function refreshFotoUrls(paths: string[]): Promise<Record<string, string>> {
-  if (paths.length === 0) return {};
-
-  const result: Record<string, string> = {};
-
-  // createSignedUrls in batch
-  const { data, error } = await supabase.storage
-    .from('wijkfotos')
-    .createSignedUrls(paths, 3600);
-
-  if (!error && data) {
-    for (let i = 0; i < data.length; i++) {
-      const item = data[i];
-      if (item.signedUrl) {
-        // Match op index (volgorde is gegarandeerd) als path niet matcht
-        const originalPath = paths[i];
-        result[originalPath] = item.signedUrl;
-      }
-    }
-  }
-
-  // Fallback: als batch niet werkt, probeer individueel
-  if (Object.keys(result).length === 0) {
-    for (const path of paths) {
-      const { data: single } = await supabase.storage
-        .from('wijkfotos')
-        .createSignedUrl(path, 3600);
-      if (single?.signedUrl) {
-        result[path] = single.signedUrl;
-      }
-    }
-  }
-
-  return result;
 }
 
 // ── Antwoorden ──────────────────────────────────────────
