@@ -25,8 +25,10 @@ export function ObservatiesPanel() {
       // Genereer public URL voor eerste foto als thumbnail
       for (const obs of data) {
         const paths = parseFotoPaths(obs.foto_path);
+        console.log('[DEBUG foto]', { id: obs.id, foto_path: obs.foto_path, parsed: paths });
         if (paths.length > 0) {
           obs.foto_url = getFotoPublicUrl(paths[0]);
+          console.log('[DEBUG foto url]', obs.foto_url);
         }
       }
 
