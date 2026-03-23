@@ -136,18 +136,36 @@ export async function uploadFoto(
 export async function refreshFotoUrls(paths: string[]): Promise<Record<string, string>> {
   if (paths.length === 0) return {};
 
+  const result: Record<string, string> = {};
+
+  // createSignedUrls in batch
   const { data, error } = await supabase.storage
     .from('wijkfotos')
     .createSignedUrls(paths, 3600);
 
-  if (error || !data) return {};
-
-  const result: Record<string, string> = {};
-  for (const item of data) {
-    if (item.signedUrl && item.path) {
-      result[item.path] = item.signedUrl;
+  if (!error && data) {
+    for (let i = 0; i < data.length; i++) {
+      const item = data[i];
+      if (item.signedUrl) {
+        // Match op index (volgorde is gegarandeerd) als path niet matcht
+        const originalPath = paths[i];
+        result[originalPath] = item.signedUrl;
+      }
     }
   }
+
+  // Fallback: als batch niet werkt, probeer individueel
+  if (Object.keys(result).length === 0) {
+    for (const path of paths) {
+      const { data: single } = await supabase.storage
+        .from('wijkfotos')
+        .createSignedUrl(path, 3600);
+      if (single?.signedUrl) {
+        result[path] = single.signedUrl;
+      }
+    }
+  }
+
   return result;
 }
 
