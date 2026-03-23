@@ -1,0 +1,1 @@
+export { WijkrondeTab } from './WijkrondeTab';

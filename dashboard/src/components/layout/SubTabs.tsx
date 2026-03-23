@@ -12,9 +12,9 @@ const ruweDataTabs = [
   { id: 'leefomgeving', label: 'Leefomgeving' },
 ];
 
-const eigenOnderzoekTabs = [
-  { id: 'notities', label: 'Notities' },
-  { id: 'vergelijkingen', label: 'Vergelijkingen' },
+const wijkrondeTabs = [
+  { id: 'vragen', label: 'Vragen' },
+  { id: 'observaties', label: 'Observaties' },
 ];
 
 function BenchmarkToggle() {
@@ -79,7 +79,15 @@ function BenchmarkToggle() {
 export function SubTabs() {
   const { mainTab, subTab, setSubTab } = useGebiedStore();
 
-  const tabs = mainTab === 'ruwe-data' ? ruweDataTabs : eigenOnderzoekTabs;
+  const tabs = mainTab === 'ruwe-data'
+    ? ruweDataTabs
+    : mainTab === 'wijkronde'
+      ? wijkrondeTabs
+      : []; // nader-onderzoek heeft geen subtabs
+
+  const showControls = mainTab === 'ruwe-data';
+
+  if (tabs.length === 0) return null;
 
   return (
     <nav
@@ -129,31 +137,35 @@ export function SubTabs() {
             </button>
           ))}
         </div>
-        {/* Desktop: controls naast tabs */}
-        <div className="sub-tabs-controls-desktop" style={{
-          display: 'flex',
+        {/* Desktop: controls naast tabs (alleen bij Ruwe Data) */}
+        {showControls && (
+          <div className="sub-tabs-controls-desktop" style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            flexShrink: 0,
+            paddingRight: '4px',
+          }}>
+            <BenchmarkToggle />
+            <YearSelector />
+          </div>
+        )}
+      </div>
+
+      {/* Mobiel: controls op eigen regel (alleen bij Ruwe Data) */}
+      {showControls && (
+        <div className="sub-tabs-controls-mobile" style={{
+          display: 'none',
           alignItems: 'center',
+          justifyContent: 'center',
           gap: '8px',
-          flexShrink: 0,
-          paddingRight: '4px',
+          padding: '6px 12px',
+          borderTop: '1px solid #e5e7eb',
         }}>
           <BenchmarkToggle />
           <YearSelector />
         </div>
-      </div>
-
-      {/* Mobiel: controls op eigen regel */}
-      <div className="sub-tabs-controls-mobile" style={{
-        display: 'none',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: '8px',
-        padding: '6px 12px',
-        borderTop: '1px solid #e5e7eb',
-      }}>
-        <BenchmarkToggle />
-        <YearSelector />
-      </div>
+      )}
     </nav>
   );
 }

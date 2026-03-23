@@ -3,7 +3,7 @@ import { useGebiedStore } from '../../store/gebiedStore';
 import { loadAllGebieden, loadGebiedData } from '../../services/cbs';
 import type { Gebied } from '../../types/gebied';
 
-export function GebiedSearch() {
+export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
   const [isOpen, setIsOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState({ buurt: true, wijk: true, gemeente: true });
@@ -115,6 +115,7 @@ export function GebiedSearch() {
     setIsOpen(false);
     setQuery('');
     setSelectedGemeenteFilter(null);
+    onSelect?.();
 
     setIsLoadingData(true);
     try {

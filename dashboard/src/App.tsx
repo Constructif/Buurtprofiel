@@ -5,7 +5,8 @@ import { SubTabs } from './components/layout/SubTabs';
 import { useGebiedStore } from './store/gebiedStore';
 import { loadGebiedData } from './services/cbs';
 import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn, WerkInkomen, Leefomgeving } from './components/tabs/ruwe-data';
-import { EigenOnderzoekPlaceholder } from './components/tabs/eigen-onderzoek/Placeholder';
+import { WijkrondeTab } from './components/tabs/wijkronde';
+import { NaderOnderzoekPlaceholder } from './components/tabs/nader-onderzoek';
 import { useAuth } from './hooks/useAuth';
 import { useAuthStore } from './store/authStore';
 import { LoginPage } from './components/auth/LoginPage';
@@ -56,8 +57,11 @@ function App() {
   }, [selectedJaar, selectedGebied, setGebiedData, setGemeenteData]);
 
   const renderContent = () => {
-    if (mainTab === 'eigen-onderzoek') {
-      return <EigenOnderzoekPlaceholder />;
+    if (mainTab === 'wijkronde') {
+      return <WijkrondeTab />;
+    }
+    if (mainTab === 'nader-onderzoek') {
+      return <NaderOnderzoekPlaceholder />;
     }
 
     // Ruwe data tabs
@@ -96,7 +100,7 @@ function App() {
   }
 
   // Tab key voor fade-transitie bij wissel
-  const tabKey = mainTab === 'eigen-onderzoek' ? 'eigen-onderzoek' : subTab;
+  const tabKey = mainTab !== 'ruwe-data' ? mainTab : subTab;
 
   return (
     <div style={{ minHeight: '100vh', backgroundColor: '#f5f1ee' }}>

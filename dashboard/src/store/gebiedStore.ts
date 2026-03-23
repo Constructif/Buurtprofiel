@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { Gebied, GebiedData } from '../types/gebied';
 import type { Voorziening } from '../services/overpass';
+import type { Wijkronde } from '../types/wijkronde';
 import { fetchVoorzieningen } from '../services/overpass';
 import { fetchGeometry } from '../services/pdok';
 import { calculateBBox } from '../services/geo-utils';
@@ -74,10 +75,14 @@ interface GebiedStore {
   setIsLoadingData: (loading: boolean) => void;
 
   // Active tabs
-  mainTab: 'ruwe-data' | 'eigen-onderzoek';
-  setMainTab: (tab: 'ruwe-data' | 'eigen-onderzoek') => void;
+  mainTab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek';
+  setMainTab: (tab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek') => void;
   subTab: string;
   setSubTab: (tab: string) => void;
+
+  // Wijkronde
+  actieveRonde: Wijkronde | null;
+  setActieveRonde: (ronde: Wijkronde | null) => void;
 }
 
 export const useGebiedStore = create<GebiedStore>((set, get) => ({
@@ -277,7 +282,17 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
   setIsLoadingData: (loading) => set({ isLoadingData: loading }),
 
   mainTab: 'ruwe-data',
-  setMainTab: (tab) => set({ mainTab: tab }),
+  setMainTab: (tab) => {
+    const defaultSubTabs: Record<string, string> = {
+      'ruwe-data': 'overzicht',
+      'wijkronde': 'vragen',
+      'nader-onderzoek': '',
+    };
+    set({ mainTab: tab, subTab: defaultSubTabs[tab] || '' });
+  },
   subTab: 'overzicht',
   setSubTab: (tab) => set({ subTab: tab }),
+
+  actieveRonde: null,
+  setActieveRonde: (ronde) => set({ actieveRonde: ronde }),
 }));

@@ -5,7 +5,8 @@ export function MainTabs() {
 
   const tabs = [
     { id: 'ruwe-data', label: 'Ruwe Data' },
-    { id: 'eigen-onderzoek', label: 'Eigen Onderzoek' },
+    { id: 'wijkronde', label: 'Wijkronde' },
+    { id: 'nader-onderzoek', label: 'Nader Onderzoek' },
   ] as const;
 
   return (
