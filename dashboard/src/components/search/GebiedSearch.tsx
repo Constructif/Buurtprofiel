@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useGebiedStore } from '../../store/gebiedStore';
 import { loadAllGebieden, loadGebiedData } from '../../services/cbs';
 import type { Gebied } from '../../types/gebied';
+import { logger } from '../../utils/logger';
 
 export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
   const [isOpen, setIsOpen] = useState(false);
@@ -34,7 +35,7 @@ export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
         const gebieden = await loadAllGebieden();
         setAllGebieden(gebieden);
       } catch (error) {
-        console.error('Fout bij laden gebieden:', error);
+        logger.error('Fout bij laden gebieden:', error);
       } finally {
         setIsLoadingGebieden(false);
       }
@@ -100,7 +101,7 @@ export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
         setGemeenteData(gemeenteData);
         prefetchVoorzieningen(gebied.code);
       } catch (error) {
-        console.error('Fout bij laden data:', error);
+        logger.error('Fout bij laden data:', error);
       } finally {
         setIsLoadingData(false);
       }
@@ -125,7 +126,7 @@ export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
       // Start voorzieningen prefetch parallel (fire-and-forget)
       prefetchVoorzieningen(gebied.code);
     } catch (error) {
-      console.error('Fout bij laden data:', error);
+      logger.error('Fout bij laden data:', error);
     } finally {
       setIsLoadingData(false);
     }

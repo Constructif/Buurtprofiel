@@ -3,6 +3,7 @@ import type { Gebied, GebiedData } from '../types/gebied';
 import type { Voorziening } from '../services/overpass';
 import type { Wijkronde } from '../types/wijkronde';
 import { fetchVoorzieningen } from '../services/overpass';
+import { logger } from '../utils/logger';
 import { fetchGeometry } from '../services/pdok';
 import { calculateBBox } from '../services/geo-utils';
 
@@ -257,7 +258,7 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
 
         return cacheEntry;
       } catch (error) {
-        console.error(`Prefetch voorzieningen fout (poging ${retryCount + 1}/${MAX_RETRIES + 1}):`, error);
+        logger.error(`Prefetch voorzieningen fout (poging ${retryCount + 1}/${MAX_RETRIES + 1}):`, error);
 
         // Retry als we nog pogingen over hebben
         if (retryCount < MAX_RETRIES) {

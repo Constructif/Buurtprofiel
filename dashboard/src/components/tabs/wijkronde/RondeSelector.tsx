@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { fetchRondesForBuurt, createRonde, deleteRonde } from '../../../services/wijkronde';
 import type { Wijkronde } from '../../../types/wijkronde';
+import { logger } from '../../../utils/logger';
 
 export function RondeSelector() {
   const selectedGebied = useGebiedStore((s) => s.selectedGebied);
@@ -25,7 +26,7 @@ export function RondeSelector() {
         setActieveRonde(data[0] || null);
       }
     } catch (error) {
-      console.error('Fout bij laden rondes:', error);
+      logger.error('Fout bij laden rondes:', error);
     } finally {
       setLoading(false);
     }
@@ -43,7 +44,7 @@ export function RondeSelector() {
       setActieveRonde(ronde);
       await loadRondes();
     } catch (error) {
-      console.error('Fout bij aanmaken ronde:', error);
+      logger.error('Fout bij aanmaken ronde:', error);
     } finally {
       setCreating(false);
     }
@@ -59,7 +60,7 @@ export function RondeSelector() {
       }
       await loadRondes();
     } catch (error) {
-      console.error('Fout bij verwijderen ronde:', error);
+      logger.error('Fout bij verwijderen ronde:', error);
     } finally {
       setDeleting(null);
     }

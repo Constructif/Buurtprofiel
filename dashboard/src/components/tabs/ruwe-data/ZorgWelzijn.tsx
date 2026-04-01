@@ -6,6 +6,7 @@ import type { ZorgWelzijnData } from '../../../types/zorgWelzijn';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenZorgWelzijnScore } from '../../../utils/scoring';
 import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { logger } from '../../../utils/logger';
 import {
   LineChart,
   Line,
@@ -121,7 +122,7 @@ export function ZorgWelzijn() {
         }
       } catch (err) {
         setError('Fout bij ophalen van data');
-        console.error(err);
+        logger.error('Fout bij laden zorg/welzijn:', err);
       } finally {
         setIsLoading(false);
       }

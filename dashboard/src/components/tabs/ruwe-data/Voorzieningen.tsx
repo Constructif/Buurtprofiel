@@ -15,6 +15,7 @@ import { Card } from '../../ui/Card';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenVoorzieningenScore } from '../../../utils/scoring';
 import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { logger } from '../../../utils/logger';
 
 // Fix voor Leaflet default marker icons in Vite
 // @ts-expect-error - Leaflet internal property needs to be reset for Vite compatibility
@@ -98,7 +99,7 @@ function MapController({ geometry, voorzieningen, selectedVoorzieningId }: MapCo
         });
       }
     } catch (error) {
-      console.error('Fout bij fitBounds:', error);
+      logger.error('Fout bij fitBounds:', error);
     }
   }, [geometry, map]);
 
@@ -249,7 +250,7 @@ export function Voorzieningen() {
           setVoorzieningen([]);
         }
       } catch (err) {
-        console.error('Fout bij laden voorzieningen:', err);
+        logger.error('Fout bij laden voorzieningen:', err);
         if (!isCancelled) {
           setError('Er ging iets mis bij het laden van voorzieningen.');
           setGeometry(null);

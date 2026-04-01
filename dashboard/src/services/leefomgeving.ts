@@ -7,6 +7,7 @@ import type {
 } from '../types/leefomgeving';
 import { NL_LEEFOMGEVING_REFERENTIES } from '../types/leefomgeving';
 import { supabase } from './supabase';
+import { logger } from '../utils/logger';
 
 /**
  * Haal bodemgebruik data op uit Supabase (gemeente-niveau)
@@ -276,7 +277,7 @@ export async function fetchLeefomgevingData(
       isGemeenteNiveau,
     };
   } catch (error) {
-    console.error('Fout bij ophalen leefomgeving data:', error);
+    logger.error('Fout bij ophalen leefomgeving data:', error);
     return null;
   }
 }

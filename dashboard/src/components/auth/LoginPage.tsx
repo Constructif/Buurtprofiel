@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '../../services/supabase';
+import { logger } from '../../utils/logger';
 
 const ALLOWED_DOMAIN = '@constructif.nl';
 const MAX_EMAILS_PER_HOUR = 2;
@@ -118,7 +119,7 @@ export function LoginPage() {
     setIsSending(false);
 
     if (supabaseError) {
-      console.error('Supabase OTP error:', supabaseError.message, supabaseError);
+      logger.error('Supabase OTP error:', supabaseError.message);
       const msg = supabaseError.message?.toLowerCase() || '';
 
       if (msg.includes('rate') || msg.includes('limit') || supabaseError.status === 429) {

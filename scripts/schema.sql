@@ -206,19 +206,19 @@ ALTER TABLE groenpercentage ENABLE ROW LEVEL SECURITY;
 ALTER TABLE voorzieningen ENABLE ROW LEVEL SECURITY;
 ALTER TABLE data_metadata ENABLE ROW LEVEL SECURITY;
 
--- Public read policies (iedereen mag lezen)
-CREATE POLICY "Public read" ON gebieden FOR SELECT USING (true);
-CREATE POLICY "Public read" ON kerncijfers FOR SELECT USING (true);
-CREATE POLICY "Public read" ON criminaliteit FOR SELECT USING (true);
-CREATE POLICY "Public read" ON opleiding FOR SELECT USING (true);
-CREATE POLICY "Public read" ON werkgelegenheid FOR SELECT USING (true);
-CREATE POLICY "Public read" ON herkomst_land FOR SELECT USING (true);
-CREATE POLICY "Public read" ON bevolkings_dynamiek FOR SELECT USING (true);
-CREATE POLICY "Public read" ON rivm_gezondheid FOR SELECT USING (true);
-CREATE POLICY "Public read" ON bodemgebruik FOR SELECT USING (true);
-CREATE POLICY "Public read" ON groenpercentage FOR SELECT USING (true);
-CREATE POLICY "Public read" ON voorzieningen FOR SELECT USING (true);
-CREATE POLICY "Public read" ON data_metadata FOR SELECT USING (true);
+-- Authenticated read policies (alleen ingelogde gebruikers mogen lezen)
+CREATE POLICY "Authenticated read" ON gebieden FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON kerncijfers FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON criminaliteit FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON opleiding FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON werkgelegenheid FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON herkomst_land FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON bevolkings_dynamiek FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON rivm_gezondheid FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON bodemgebruik FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON groenpercentage FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON voorzieningen FOR SELECT USING (auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read" ON data_metadata FOR SELECT USING (auth.role() = 'authenticated');
 
 -- ============================================================
 -- EMAIL LOG (magic link rate limit tracking)
@@ -229,8 +229,8 @@ CREATE TABLE IF NOT EXISTS email_log (
 );
 
 ALTER TABLE email_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Public read" ON email_log FOR SELECT USING (true);
-CREATE POLICY "Public insert" ON email_log FOR INSERT WITH CHECK (true);
+-- Geen SELECT policy — email adressen zijn niet publiek leesbaar
+CREATE POLICY "Authenticated insert" ON email_log FOR INSERT WITH CHECK (auth.role() = 'authenticated');
 
 -- ============================================================
 -- INITIELE DATA METADATA

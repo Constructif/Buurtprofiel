@@ -118,11 +118,13 @@ export async function updateObservatie(
 
 // ── Foto's ──────────────────────────────────────────────
 
-/** Genereer een publieke URL voor een foto path (bucket moet public zijn) */
-export function getFotoPublicUrl(path: string): string {
-  const { data } = supabase.storage.from('wijkfotos').getPublicUrl(path);
-  // Cache-busting: voorkom dat browser oude 404 responses cached
-  return data.publicUrl + '?t=' + Date.now();
+/** Genereer een signed URL voor een foto path (bucket moet private zijn) */
+export async function getFotoSignedUrl(path: string): Promise<string> {
+  const { data, error } = await supabase.storage
+    .from('wijkfotos')
+    .createSignedUrl(path, 3600); // 1 uur geldig
+  if (error) throw error;
+  return data.signedUrl;
 }
 
 export async function uploadFoto(
@@ -130,8 +132,7 @@ export async function uploadFoto(
   rondeId: string,
   blob: Blob,
 ): Promise<{ url: string; path: string }> {
-  const timestamp = Date.now();
-  const path = `${buurtcode}/${rondeId}/${timestamp}.jpg`;
+  const path = `${buurtcode}/${rondeId}/${crypto.randomUUID()}.jpg`;
 
   const { error } = await supabase.storage
     .from('wijkfotos')
@@ -142,7 +143,8 @@ export async function uploadFoto(
 
   if (error) throw error;
 
-  return { url: getFotoPublicUrl(path), path };
+  const url = await getFotoSignedUrl(path);
+  return { url, path };
 }
 
 export async function deleteFoto(path: string): Promise<void> {

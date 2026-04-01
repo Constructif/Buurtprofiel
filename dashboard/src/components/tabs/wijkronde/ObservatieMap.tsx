@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import { fetchGeometry } from '../../../services/pdok';
 import type { Wijkobservatie } from '../../../types/wijkronde';
 import { CATEGORIE_KLEUREN, type ObservatieCategorie } from '../../../types/wijkronde';
+import { logger } from '../../../utils/logger';
 
 // SVG pin icon factory
 function createPinIcon(color: string) {
@@ -90,7 +91,7 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
       const geo = await fetchGeometry(gebiedCode);
       setGeometry(geo);
     } catch (error) {
-      console.error('Fout bij laden geometrie:', error);
+      logger.error('Fout bij laden geometrie:', error);
     } finally {
       setLoading(false);
     }

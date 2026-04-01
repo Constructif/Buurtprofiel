@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { logger } from '../utils/logger';
 
 export interface Voorziening {
   id: string;
@@ -39,7 +40,7 @@ export async function fetchVoorzieningen(
       });
 
     if (error) {
-      console.error('Supabase voorzieningen error:', error);
+      logger.error('Supabase voorzieningen error:', error);
       throw new Error(`Voorzieningen ophalen mislukt: ${error.message}`);
     }
 
@@ -83,7 +84,7 @@ export async function fetchVoorzieningen(
       })
       .filter((v: Voorziening | null): v is Voorziening => v !== null);
   } catch (error) {
-    console.error('Error fetching voorzieningen:', error);
+    logger.error('Error fetching voorzieningen:', error);
     throw error;
   }
 }

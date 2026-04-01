@@ -6,6 +6,7 @@ import type {
 } from '../types/zorgWelzijn';
 import { supabase } from './supabase';
 import { rateLimitedQuery } from '../utils/rateLimiter';
+import { logger } from '../utils/logger';
 
 /**
  * Fetch RIVM zorg/welzijn data voor een specifieke regio uit Supabase
@@ -187,7 +188,7 @@ export async function fetchZorgWelzijnData(
       vergelijking,
     };
   } catch (error) {
-    console.error('Error fetching zorg welzijn data:', error);
+    logger.error('Error fetching zorg welzijn data:', error);
     return null;
   }
 }

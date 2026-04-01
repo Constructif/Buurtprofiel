@@ -7,6 +7,7 @@ import { NL_LEEFOMGEVING_REFERENTIES } from '../../../types/leefomgeving';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenLeefomgevingScore } from '../../../utils/scoring';
 import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { logger } from '../../../utils/logger';
 import {
   BarChart,
   Bar,
@@ -70,7 +71,7 @@ export function Leefomgeving() {
         }
       } catch (err) {
         setError('Fout bij ophalen van data');
-        console.error(err);
+        logger.error('Fout bij laden leefomgeving:', err);
       } finally {
         setIsLoading(false);
       }

@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, GeoJSON, useMap } from 'react-leaflet';
 import type { Map, GeoJSON as LeafletGeoJSON } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { useGebiedStore } from '../../store/gebiedStore';
+import { logger } from '../../utils/logger';
 import { fetchGeometry } from '../../services/pdok';
 
 function MapController({ geometry }: { geometry: GeoJSON.Feature | null }) {
@@ -61,7 +62,7 @@ export function BuurtMap() {
         const geo = await fetchGeometry(selectedGebied.code);
         setGeometry(geo);
       } catch (error) {
-        console.error('Fout bij laden geometrie:', error);
+        logger.error('Fout bij laden geometrie:', error);
       } finally {
         setLoading(false);
       }

@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useGebiedStore } from '../store/gebiedStore';
+import { logger } from '../utils/logger';
 
 /**
  * Hook voor per-Card jaar-switching met caching en trend-modus.
@@ -95,7 +96,7 @@ export function useCardYear<T>(
       trendCacheRef.current = data;
       const jaren = data.map((d) => d.jaar as number).filter(Boolean);
       setYearsWithData(jaren);
-    }).catch((err) => { console.warn('Trend data laden mislukt:', err); });
+    }).catch((err) => { logger.warn('Trend data laden mislukt:', err); });
 
     return () => { cancelled = true; };
   }, [trendFetcher, selectedGebied?.code]);
@@ -134,7 +135,7 @@ export function useCardYear<T>(
           setYearsWithData(jaren);
         }
       } catch (err) {
-        console.error('Fout bij laden trend data:', err);
+        logger.error('Fout bij laden trend data:', err);
       } finally {
         if (requestId === requestIdRef.current) setIsLoading(false);
       }
@@ -157,7 +158,7 @@ export function useCardYear<T>(
         setOverrideData(data);
       }
     } catch (err) {
-      console.error(`Fout bij laden data voor ${jaar}:`, err);
+      logger.error(`Fout bij laden data voor ${jaar}:`, err);
     } finally {
       if (requestId === requestIdRef.current) setIsLoading(false);
     }

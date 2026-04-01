@@ -3,6 +3,7 @@ import type { ObservatieCategorie } from '../../../types/wijkronde';
 import { CATEGORIEEN, CATEGORIE_KLEUREN, serializeFotoPaths } from '../../../types/wijkronde';
 import { compressImage } from '../../../utils/imageCompress';
 import { uploadFoto, createObservatie } from '../../../services/wijkronde';
+import { sanitizeText } from '../../../utils/sanitize';
 
 interface ObservatieFormProps {
   buurtcode: string;
@@ -51,6 +52,22 @@ export function ObservatieForm({ buurtcode, rondeId, lat, lng, onClose, onSaved 
     const file = e.target.files?.[0];
     if (!file) return;
 
+    // Bestandstype validatie
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError('Alleen afbeeldingen (JPEG, PNG, WebP) zijn toegestaan');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Bestandsgrootte validatie (max 20MB voor compressie)
+    const MAX_FILE_SIZE = 20 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      setError('Bestand is te groot (max 20MB)');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     try {
       const compressed = await compressImage(file);
       const reader = new FileReader();
@@ -90,7 +107,7 @@ export function ObservatieForm({ buurtcode, rondeId, lat, lng, onClose, onSaved 
         lat,
         lng,
         categorie,
-        opmerking: opmerking.trim() || null,
+        opmerking: sanitizeText(opmerking).trim() || null,
         foto_url: null,
         foto_path: serializeFotoPaths(paths),
         ronde_id: rondeId,

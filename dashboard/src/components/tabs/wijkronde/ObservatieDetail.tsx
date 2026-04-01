@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import type { Wijkobservatie, ObservatieCategorie } from '../../../types/wijkronde';
 import { CATEGORIEEN, CATEGORIE_KLEUREN, parseFotoPaths, serializeFotoPaths } from '../../../types/wijkronde';
 import { compressImage } from '../../../utils/imageCompress';
-import { uploadFoto, deleteFoto, updateObservatie, deleteObservatie, getFotoPublicUrl } from '../../../services/wijkronde';
+import { uploadFoto, deleteFoto, updateObservatie, deleteObservatie, getFotoSignedUrl } from '../../../services/wijkronde';
+import { sanitizeText } from '../../../utils/sanitize';
 
 interface ObservatieDetailProps {
   observatie: Wijkobservatie;
@@ -28,11 +29,18 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
   const [fullscreenFoto, setFullscreenFoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Load foto public URLs
+  // Load foto signed URLs
   useEffect(() => {
     const paths = parseFotoPaths(observatie.foto_path);
-    setFotos(paths.map(p => ({ path: p, url: getFotoPublicUrl(p) })));
-    setLoadingFotos(false);
+    if (paths.length === 0) {
+      setFotos([]);
+      setLoadingFotos(false);
+      return;
+    }
+    Promise.all(paths.map(async (p) => ({ path: p, url: await getFotoSignedUrl(p) })))
+      .then(setFotos)
+      .catch(() => setError('Foto URLs laden mislukt'))
+      .finally(() => setLoadingFotos(false));
   }, [observatie.foto_path]);
 
   // Lock body scroll
@@ -46,6 +54,22 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
   const handleAddFoto = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Bestandstype validatie
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      setError('Alleen afbeeldingen (JPEG, PNG, WebP) zijn toegestaan');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // Bestandsgrootte validatie (max 20MB voor compressie)
+    const MAX_FILE_SIZE = 20 * 1024 * 1024;
+    if (file.size > MAX_FILE_SIZE) {
+      setError('Bestand is te groot (max 20MB)');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
 
     setUploading(true);
     setError(null);
@@ -89,7 +113,7 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
     try {
       await updateObservatie(observatie.id, {
         categorie,
-        opmerking: opmerking.trim() || null,
+        opmerking: sanitizeText(opmerking).trim() || null,
         foto_path: serializeFotoPaths(currentPaths()),
       });
       onUpdated();

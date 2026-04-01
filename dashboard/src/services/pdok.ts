@@ -1,4 +1,5 @@
 import { rateLimitedFetch, deduplicate } from '../utils/rateLimiter';
+import { logger } from '../utils/logger';
 
 const PDOK_BASE_2024 = 'https://api.pdok.nl/cbs/wijken-en-buurten-2024/ogc/v1';
 
@@ -38,7 +39,7 @@ async function _fetchGeometry(code: string): Promise<any | null> {
         }
       }
     } catch (error) {
-      console.warn(`PDOK fetch error for ${propName}:`, error);
+      logger.warn(`PDOK fetch error for ${propName}:`, error);
     }
   }
 
@@ -58,7 +59,7 @@ async function _fetchGeometry(code: string): Promise<any | null> {
         }
       }
     } catch (error) {
-      console.warn(`Fallback PDOK error:`, error);
+      logger.warn(`Fallback PDOK error:`, error);
     }
   }
 

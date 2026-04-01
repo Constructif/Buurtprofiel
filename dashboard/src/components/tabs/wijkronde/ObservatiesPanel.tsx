@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { fetchObservaties, getFotoPublicUrl } from '../../../services/wijkronde';
+import { fetchObservaties, getFotoSignedUrl } from '../../../services/wijkronde';
 import type { Wijkobservatie } from '../../../types/wijkronde';
 import { CATEGORIE_KLEUREN, parseFotoPaths } from '../../../types/wijkronde';
+import { logger } from '../../../utils/logger';
 import { ObservatieMap } from './ObservatieMap';
 import { ObservatieForm } from './ObservatieForm';
 import { ObservatieDetail } from './ObservatieDetail';
@@ -22,17 +23,17 @@ export function ObservatiesPanel() {
     try {
       const data = await fetchObservaties(actieveRonde.id);
 
-      // Genereer public URL voor eerste foto als thumbnail
-      for (const obs of data) {
+      // Genereer signed URL voor eerste foto als thumbnail
+      await Promise.all(data.map(async (obs) => {
         const paths = parseFotoPaths(obs.foto_path);
         if (paths.length > 0) {
-          obs.foto_url = getFotoPublicUrl(paths[0]);
+          obs.foto_url = await getFotoSignedUrl(paths[0]);
         }
-      }
+      }));
 
       setObservaties(data);
     } catch (error) {
-      console.error('Fout bij laden observaties:', error);
+      logger.error('Fout bij laden observaties:', error);
     } finally {
       setLoading(false);
     }

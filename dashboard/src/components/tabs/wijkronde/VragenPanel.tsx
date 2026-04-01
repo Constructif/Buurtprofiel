@@ -3,6 +3,7 @@ import { useGebiedStore } from '../../../store/gebiedStore';
 import { useAuthStore } from '../../../store/authStore';
 import { wijkrondeVragen } from '../../../data/wijkrondeVragen';
 import { fetchAntwoorden, upsertAntwoord } from '../../../services/wijkronde';
+import { logger } from '../../../utils/logger';
 import type { WijkrondeAntwoord } from '../../../types/wijkronde';
 
 const SCORE_LABELS = ['Slecht', 'Matig', 'Voldoende', 'Goed', 'Uitstekend'];
@@ -30,7 +31,7 @@ export function VragenPanel() {
       });
       setAntwoorden(map);
     } catch (error) {
-      console.error('Fout bij laden antwoorden:', error);
+      logger.error('Fout bij laden antwoorden:', error);
     } finally {
       setLoading(false);
     }
@@ -60,7 +61,7 @@ export function VragenPanel() {
         antwoord: value,
       });
     } catch (error) {
-      console.error('Fout bij opslaan antwoord:', error);
+      logger.error('Fout bij opslaan antwoord:', error);
     } finally {
       setSaving(null);
     }

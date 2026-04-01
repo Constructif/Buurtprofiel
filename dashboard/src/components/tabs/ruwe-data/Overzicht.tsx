@@ -11,6 +11,7 @@ import { fetchLeefomgevingData } from '../../../services/leefomgeving';
 import type { ZorgWelzijnData } from '../../../types/zorgWelzijn';
 import type { LeefomgevingData } from '../../../types/leefomgeving';
 import type { BuurtprofielScore, TabScore } from '../../../types/scoring';
+import { logger } from '../../../utils/logger';
 
 export function Overzicht() {
   const {
@@ -58,7 +59,7 @@ export function Overzicht() {
         setZorgData(zorg);
         setLeefomgevingData(leefomgeving);
       } catch (err) {
-        console.error('Fout bij laden extra data:', err);
+        logger.error('Fout bij laden extra data:', err);
       } finally {
         setIsLoadingExtra(false);
       }

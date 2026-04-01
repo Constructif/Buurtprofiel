@@ -13,7 +13,25 @@
       "Bash(type:*)",
       "Bash(Get-Content \"c:\\Users\\rajco\\OneDrive\\Documenten\\Claude code\\Buurtprofiel\\dashboard\\dist\\assets\\*.css\" -TotalCount 200)",
       "Bash(git init:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(timeout:*)",
+      "Bash(git push)",
+      "Bash(git checkout:*)",
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nImprove Voorzieningen reliability and UX enhancements\n\n- Fix race conditions in prefetch system with promise sharing\n- Add retry logic \\(3 attempts with exponential backoff\\) for API failures\n- Add 45s timeout to Overpass API calls\n- Add user-friendly error messages with retry button\n- Show gemeente name in search results instead of area codes\n- Add leefbaarheid score calculation utility\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(curl:*)",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); [print\\(f\"\"{v[''Key'']}: {v[''Title'']}\"\"\\) for v in data[''value''] if any\\(x in v.get\\(''Title'',''''\\).lower\\(\\) for x in [''jeugd'',''wmo'',''zorg'',''ggz'',''mantel'']\\)]\")",
+      "Bash(git commit:*)",
+      "WebFetch(domain:opendata.cbs.nl)",
+      "WebFetch(domain:datasets.cbs.nl)",
+      "Bash(cd:*)",
+      "Bash(python3:*)",
+      "WebFetch(domain:longreads.cbs.nl)",
+      "WebFetch(domain:www.staatvenz.nl)",
+      "WebFetch(domain:www.clo.nl)",
+      "Bash(git push:*)",
+      "Bash(git stash:*)",
+      "Bash(git pull:*)",
+      "Bash(git merge:*)"
     ]
   }
 }

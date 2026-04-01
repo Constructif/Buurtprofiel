@@ -8,6 +8,7 @@ import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn, Wer
 import { WijkrondeTab } from './components/tabs/wijkronde';
 import { NaderOnderzoekPlaceholder } from './components/tabs/nader-onderzoek';
 import { useAuth } from './hooks/useAuth';
+import { logger } from './utils/logger';
 import { useAuthStore } from './store/authStore';
 import { LoginPage } from './components/auth/LoginPage';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -50,7 +51,7 @@ function App() {
         }
       })
       .catch((error) => {
-        if (!cancelled) console.error('Fout bij laden data voor jaar:', error);
+        if (!cancelled) logger.error('Fout bij laden data voor jaar:', error);
       });
 
     return () => { cancelled = true; };
