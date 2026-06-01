@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { MapContainer, TileLayer, GeoJSON, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, GeoJSON, Marker, Popup, Polygon, Polyline, CircleMarker, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import type { Map as LeafletMap, GeoJSON as LeafletGeoJSON } from 'leaflet';
+import type { Map as LeafletMap } from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { fetchGeometry } from '../../../services/pdok';
-import type { Wijkobservatie } from '../../../types/wijkronde';
+import type { Wijkobservatie, GebiedPolygon } from '../../../types/wijkronde';
 import { CATEGORIE_KLEUREN, type ObservatieCategorie } from '../../../types/wijkronde';
 import { logger } from '../../../utils/logger';
 
@@ -33,25 +33,23 @@ function getPinIcon(categorie: ObservatieCategorie) {
   return pinIcons[color];
 }
 
-// Fit kaart op geometrie
-function MapController({ geometry }: { geometry: GeoJSON.Feature | null }) {
+// Fit kaart op geometrie. De fit blijft werken ook als de buurtgrens verborgen is,
+// omdat de bounds los van de zichtbare laag uit de geometrie berekend worden.
+function MapController({ geometry, toon }: { geometry: GeoJSON.Feature | null; toon: boolean }) {
   const map = useMap();
-  const geoJsonRef = useRef<LeafletGeoJSON | null>(null);
 
   useEffect(() => {
-    if (geometry && geoJsonRef.current) {
-      const bounds = geoJsonRef.current.getBounds();
-      if (bounds.isValid()) {
-        map.fitBounds(bounds, { padding: [50, 50] });
-      }
+    if (!geometry) return;
+    const bounds = L.geoJSON(geometry).getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [50, 50] });
     }
   }, [geometry, map]);
 
-  if (!geometry) return null;
+  if (!geometry || !toon) return null;
 
   return (
     <GeoJSON
-      ref={geoJsonRef}
       data={geometry}
       style={{
         color: '#eb6608',
@@ -63,11 +61,24 @@ function MapController({ geometry }: { geometry: GeoJSON.Feature | null }) {
   );
 }
 
-// Klik-handler voor de kaart
-function ClickHandler({ onMapClick }: { onMapClick: (lat: number, lng: number) => void }) {
+// Klik-handler voor de kaart. In tekenmodus plaatst een klik een gebiedspunt
+// i.p.v. het openen van het observatie-formulier.
+function ClickHandler({
+  tekenModus,
+  onMapClick,
+  onPuntToegevoegd,
+}: {
+  tekenModus: boolean;
+  onMapClick: (lat: number, lng: number) => void;
+  onPuntToegevoegd: (lat: number, lng: number) => void;
+}) {
   useMapEvents({
     click(e) {
-      onMapClick(e.latlng.lat, e.latlng.lng);
+      if (tekenModus) {
+        onPuntToegevoegd(e.latlng.lat, e.latlng.lng);
+      } else {
+        onMapClick(e.latlng.lat, e.latlng.lng);
+      }
     },
   });
   return null;
@@ -77,9 +88,31 @@ interface ObservatieMapProps {
   gebiedCode: string;
   observaties: Wijkobservatie[];
   onMapClick: (lat: number, lng: number) => void;
+  /** Opent het detail-/previewscherm voor een observatie (vanuit de popup). */
+  onObservatieClick?: (obs: Wijkobservatie) => void;
+  /** Tekenmodus: klikken plaatst gebiedspunten i.p.v. observaties. */
+  tekenModus?: boolean;
+  /** De punten van het concept-gebied dat momenteel getekend wordt ([lat, lng]). */
+  gebiedPunten?: [number, number][];
+  /** Klik in tekenmodus → nieuw gebiedspunt. */
+  onPuntToegevoegd?: (lat: number, lng: number) => void;
+  /** Reeds opgeslagen gebied voor deze ronde (getoond wanneer niet aan het tekenen). */
+  opgeslagenGebied?: GebiedPolygon | null;
+  /** Toon de oranje PDOK-buurtgrens. Standaard true. */
+  toonBuurtgrens?: boolean;
 }
 
-export function ObservatieMap({ gebiedCode, observaties, onMapClick }: ObservatieMapProps) {
+export function ObservatieMap({
+  gebiedCode,
+  observaties,
+  onMapClick,
+  onObservatieClick,
+  tekenModus = false,
+  gebiedPunten = [],
+  onPuntToegevoegd,
+  opgeslagenGebied = null,
+  toonBuurtgrens = true,
+}: ObservatieMapProps) {
   const [geometry, setGeometry] = useState<GeoJSON.Feature | null>(null);
   const [loading, setLoading] = useState(false);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -135,8 +168,46 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <MapController geometry={geometry} />
-        <ClickHandler onMapClick={onMapClick} />
+        <MapController geometry={geometry} toon={toonBuurtgrens} />
+        <ClickHandler
+          tekenModus={tekenModus}
+          onMapClick={onMapClick}
+          onPuntToegevoegd={(lat, lng) => onPuntToegevoegd?.(lat, lng)}
+        />
+
+        {/* Opgeslagen gebied (alleen tonen wanneer niet aan het tekenen) */}
+        {!tekenModus && opgeslagenGebied && opgeslagenGebied.punten.length >= 3 && (
+          <Polygon
+            positions={opgeslagenGebied.punten}
+            pathOptions={{
+              color: '#2563eb',
+              weight: 2,
+              dashArray: '6 6',
+              fillColor: '#2563eb',
+              fillOpacity: 0.08,
+            }}
+          />
+        )}
+
+        {/* Concept-gebied tijdens het tekenen */}
+        {tekenModus && gebiedPunten.length >= 3 && (
+          <Polygon
+            positions={gebiedPunten}
+            pathOptions={{ color: '#2563eb', weight: 2, fillColor: '#2563eb', fillOpacity: 0.12 }}
+          />
+        )}
+        {tekenModus && gebiedPunten.length === 2 && (
+          <Polyline positions={gebiedPunten} pathOptions={{ color: '#2563eb', weight: 2 }} />
+        )}
+        {tekenModus &&
+          gebiedPunten.map((punt, i) => (
+            <CircleMarker
+              key={i}
+              center={punt}
+              radius={6}
+              pathOptions={{ color: '#fff', weight: 2, fillColor: '#2563eb', fillOpacity: 1 }}
+            />
+          ))}
 
         {observaties.map((obs) => (
           <Marker
@@ -145,7 +216,10 @@ export function ObservatieMap({ gebiedCode, observaties, onMapClick }: Observati
             icon={getPinIcon(obs.categorie)}
           >
             <Popup>
-              <div style={{ maxWidth: '220px' }}>
+              <div
+                onClick={() => onObservatieClick?.(obs)}
+                style={{ maxWidth: '220px', cursor: onObservatieClick ? 'pointer' : 'default' }}
+              >
                 <strong style={{ fontSize: '13px', color: CATEGORIE_KLEUREN[obs.categorie] }}>
                   {obs.categorie}
                 </strong>

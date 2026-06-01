@@ -1,24 +1,38 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { useAuthStore } from '../../../store/authStore';
-import { wijkrondeVragen } from '../../../data/wijkrondeVragen';
-import { fetchAntwoorden, upsertAntwoord } from '../../../services/wijkronde';
+import { wijkrondeVragen, categorieNummer } from '../../../data/wijkrondeVragen';
+import { fetchAntwoorden, upsertAntwoord, vragenOpslaan, vragenHeropenen } from '../../../services/wijkronde';
 import { logger } from '../../../utils/logger';
 import type { WijkrondeAntwoord } from '../../../types/wijkronde';
+import { VragenOverzicht } from './VragenOverzicht';
 
 const SCORE_LABELS = ['Slecht', 'Matig', 'Voldoende', 'Goed', 'Uitstekend'];
 
 export function VragenPanel() {
   const selectedGebied = useGebiedStore((s) => s.selectedGebied);
   const actieveRonde = useGebiedStore((s) => s.actieveRonde);
+  const setActieveRonde = useGebiedStore((s) => s.setActieveRonde);
   const user = useAuthStore((s) => s.user);
 
   const [antwoorden, setAntwoorden] = useState<Record<string, string>>({});
+  const [notities, setNotities] = useState<Record<string, string>>({});
+  const [openNotities, setOpenNotities] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState<string | null>(null);
+  const [observatorInput, setObservatorInput] = useState('');
+  const [opslaanBezig, setOpslaanBezig] = useState(false);
   const debounceTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  const isReadOnly = false;
+  // Actuele waarden voor de (gedebouncede) opslag, zodat antwoord en notitie
+  // samen worden weggeschreven zonder elkaars veld te overschrijven.
+  const antwoordenRef = useRef<Record<string, string>>({});
+  const notitiesRef = useRef<Record<string, string>>({});
+  antwoordenRef.current = antwoorden;
+  notitiesRef.current = notities;
+
+  const isOpgeslagen = !!actieveRonde?.vragen_opgeslagen;
+  const isReadOnly = isOpgeslagen;
 
   const loadAntwoorden = useCallback(async () => {
     if (!actieveRonde) return;
@@ -26,10 +40,13 @@ export function VragenPanel() {
     try {
       const data = await fetchAntwoorden(actieveRonde.id);
       const map: Record<string, string> = {};
+      const notitieMap: Record<string, string> = {};
       data.forEach((a: WijkrondeAntwoord) => {
         map[a.vraag_id] = a.antwoord;
+        if (a.notitie) notitieMap[a.vraag_id] = a.notitie;
       });
       setAntwoorden(map);
+      setNotities(notitieMap);
     } catch (error) {
       logger.error('Fout bij laden antwoorden:', error);
     } finally {
@@ -41,6 +58,11 @@ export function VragenPanel() {
     loadAntwoorden();
   }, [loadAntwoorden]);
 
+  // Observator voorvullen: eerder vastgelegde naam, anders ingelogde gebruiker
+  useEffect(() => {
+    setObservatorInput(actieveRonde?.vragen_observator ?? user?.email ?? '');
+  }, [actieveRonde, user]);
+
   // Cleanup timers
   useEffect(() => {
     const timers = debounceTimers.current;
@@ -49,7 +71,9 @@ export function VragenPanel() {
     };
   }, []);
 
-  const saveAntwoord = useCallback(async (vraagId: string, value: string) => {
+  // Schrijf antwoord én notitie van dezelfde vraag samen weg, zodat een upsert
+  // het andere veld niet leegt. Leest de actuele waarden uit de refs.
+  const persist = useCallback(async (vraagId: string) => {
     if (!actieveRonde || !selectedGebied) return;
 
     setSaving(vraagId);
@@ -58,7 +82,8 @@ export function VragenPanel() {
         buurtcode: selectedGebied.code,
         ronde_id: actieveRonde.id,
         vraag_id: vraagId,
-        antwoord: value,
+        antwoord: antwoordenRef.current[vraagId] ?? '',
+        notitie: notitiesRef.current[vraagId] || null,
       });
     } catch (error) {
       logger.error('Fout bij opslaan antwoord:', error);
@@ -67,21 +92,52 @@ export function VragenPanel() {
     }
   }, [actieveRonde, selectedGebied]);
 
-  const handleChange = (vraagId: string, value: string) => {
-    setAntwoorden((prev) => ({ ...prev, [vraagId]: value }));
-
-    // Debounce voor tekstvelden
+  const debouncedPersist = (vraagId: string) => {
     if (debounceTimers.current[vraagId]) {
       clearTimeout(debounceTimers.current[vraagId]);
     }
     debounceTimers.current[vraagId] = setTimeout(() => {
-      saveAntwoord(vraagId, value);
+      persist(vraagId);
     }, 800);
+  };
+
+  const handleChange = (vraagId: string, value: string) => {
+    setAntwoorden((prev) => ({ ...prev, [vraagId]: value }));
+    antwoordenRef.current = { ...antwoordenRef.current, [vraagId]: value };
+    debouncedPersist(vraagId);
   };
 
   const handleScoreClick = (vraagId: string, score: string) => {
     setAntwoorden((prev) => ({ ...prev, [vraagId]: score }));
-    saveAntwoord(vraagId, score);
+    antwoordenRef.current = { ...antwoordenRef.current, [vraagId]: score };
+    persist(vraagId);
+  };
+
+  const handleNotitieChange = (vraagId: string, value: string) => {
+    setNotities((prev) => ({ ...prev, [vraagId]: value }));
+    notitiesRef.current = { ...notitiesRef.current, [vraagId]: value };
+    debouncedPersist(vraagId);
+  };
+
+  const handleOpslaan = async () => {
+    if (!actieveRonde || !observatorInput.trim()) return;
+    setOpslaanBezig(true);
+    try {
+      setActieveRonde(await vragenOpslaan(actieveRonde.id, observatorInput.trim()));
+    } catch (error) {
+      logger.error('Fout bij opslaan vragenlijst:', error);
+    } finally {
+      setOpslaanBezig(false);
+    }
+  };
+
+  const handleAanpassen = async () => {
+    if (!actieveRonde) return;
+    try {
+      setActieveRonde(await vragenHeropenen(actieveRonde.id));
+    } catch (error) {
+      logger.error('Fout bij heropenen vragenlijst:', error);
+    }
   };
 
   if (!selectedGebied || !actieveRonde) {
@@ -96,6 +152,19 @@ export function VragenPanel() {
 
   if (loading) {
     return <p style={{ textAlign: 'center', color: '#9ca3af', padding: '40px' }}>Laden...</p>;
+  }
+
+  // Opgeslagen → toon read-only overzicht met aanpasknop
+  if (isOpgeslagen) {
+    return (
+      <VragenOverzicht
+        antwoorden={antwoorden}
+        notities={notities}
+        observator={actieveRonde.vragen_observator ?? ''}
+        opgeslagenAt={actieveRonde.vragen_opgeslagen_at}
+        onAanpassen={handleAanpassen}
+      />
+    );
   }
 
   // Groepeer vragen per categorie
@@ -119,7 +188,7 @@ export function VragenPanel() {
             paddingBottom: '6px',
             borderBottom: '2px solid #e5e7eb',
           }}>
-            {categorie}
+            {categorieNummer[categorie]}. {categorie}
           </h4>
 
           {vragen.map((vraag) => (
@@ -261,6 +330,82 @@ export function VragenPanel() {
                 </div>
               )}
 
+              {/* Eigen notitie bij multiple-choice-vragen */}
+              {(vraag.type === 'ja-nee' || vraag.type === 'score' || vraag.type === 'keuze') && (() => {
+                // Standaard open als er al een notitie is, tenzij de gebruiker
+                // hem expliciet heeft ingeklapt (openNotities[id] === false).
+                const heeftNotitie = !!notities[vraag.id];
+                const toggle = openNotities[vraag.id];
+                const open = toggle ?? heeftNotitie;
+                return (
+                  <div style={{ marginTop: '10px' }}>
+                    {!open ? (
+                      <button
+                        onClick={() => !isReadOnly && setOpenNotities((prev) => ({ ...prev, [vraag.id]: true }))}
+                        disabled={isReadOnly}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          padding: '4px 0',
+                          border: 'none',
+                          background: 'none',
+                          color: '#eb6608',
+                          cursor: isReadOnly ? 'default' : 'pointer',
+                          fontSize: '13px',
+                          fontWeight: 500,
+                        }}
+                      >
+                        <span style={{ fontSize: '15px', lineHeight: 1 }}>+</span> Notitie
+                      </button>
+                    ) : (
+                      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px' }}>
+                        <textarea
+                          value={notities[vraag.id] || ''}
+                          onChange={(e) => handleNotitieChange(vraag.id, e.target.value)}
+                          disabled={isReadOnly}
+                          placeholder="Eigen notitie..."
+                          rows={2}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            padding: '8px 10px',
+                            border: '1px solid #d1d5db',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            resize: 'vertical',
+                            boxSizing: 'border-box',
+                            backgroundColor: isReadOnly ? '#f9fafb' : '#fff',
+                          }}
+                        />
+                        {!isReadOnly && (
+                          <button
+                            onClick={() => setOpenNotities((prev) => ({ ...prev, [vraag.id]: false }))}
+                            title="Notitie inklappen"
+                            style={{
+                              flexShrink: 0,
+                              width: '28px',
+                              height: '28px',
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              border: 'none',
+                              background: 'none',
+                              color: '#9ca3af',
+                              cursor: 'pointer',
+                              fontSize: '18px',
+                              lineHeight: 1,
+                            }}
+                          >
+                            ×
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
               {vraag.type === 'auto-gebruiker' && (
                 <p style={{
                   padding: '10px',
@@ -278,6 +423,63 @@ export function VragenPanel() {
           ))}
         </div>
       ))}
+
+      {/* Vragenlijst afsluiten */}
+      <div style={{
+        padding: '16px',
+        backgroundColor: '#fff',
+        borderRadius: '12px',
+        border: '1px solid #e5e7eb',
+        marginTop: '8px',
+      }}>
+        <h4 style={{ fontSize: '14px', fontWeight: 600, color: '#1d1d1b', margin: '0 0 4px' }}>
+          Vragenlijst afsluiten
+        </h4>
+        <p style={{ fontSize: '13px', color: '#6b7280', margin: '0 0 12px' }}>
+          Leg de observator vast en sla de vragenlijst op. Observaties kun je daarna nog steeds toevoegen.
+        </p>
+
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '6px' }}>
+          Observator
+        </label>
+        <input
+          type="text"
+          value={observatorInput}
+          onChange={(e) => setObservatorInput(e.target.value)}
+          placeholder="Naam observator"
+          style={{
+            width: '100%',
+            maxWidth: '320px',
+            padding: '10px',
+            border: '1px solid #d1d5db',
+            borderRadius: '6px',
+            fontSize: '14px',
+            boxSizing: 'border-box',
+            minHeight: '44px',
+            marginBottom: '12px',
+          }}
+        />
+
+        <div>
+          <button
+            onClick={handleOpslaan}
+            disabled={opslaanBezig || !observatorInput.trim()}
+            style={{
+              padding: '12px 24px',
+              fontSize: '14px',
+              fontWeight: 600,
+              border: 'none',
+              borderRadius: '8px',
+              backgroundColor: opslaanBezig || !observatorInput.trim() ? '#f3a672' : '#eb6608',
+              color: '#fff',
+              cursor: opslaanBezig || !observatorInput.trim() ? 'default' : 'pointer',
+              minHeight: '44px',
+            }}
+          >
+            {opslaanBezig ? 'Opslaan...' : 'Opslaan'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

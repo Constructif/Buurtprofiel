@@ -1,1 +1,1 @@
-export { NaderOnderzoekPlaceholder } from './NaderOnderzoekPlaceholder';
+export { NaderOnderzoekTab } from './NaderOnderzoekTab';

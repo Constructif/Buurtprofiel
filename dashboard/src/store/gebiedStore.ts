@@ -2,10 +2,12 @@ import { create } from 'zustand';
 import type { Gebied, GebiedData } from '../types/gebied';
 import type { Voorziening } from '../services/overpass';
 import type { Wijkronde } from '../types/wijkronde';
+import type { Favoriet } from '../types/favorieten';
 import { fetchVoorzieningen } from '../services/overpass';
 import { logger } from '../utils/logger';
 import { fetchGeometry } from '../services/pdok';
 import { calculateBBox } from '../services/geo-utils';
+import { fetchFavorieten, addFavoriet, removeFavoriet } from '../services/favorieten';
 
 interface VoorzieningenCache {
   geometry: GeoJSON.Feature | null;
@@ -84,6 +86,24 @@ interface GebiedStore {
   // Wijkronde
   actieveRonde: Wijkronde | null;
   setActieveRonde: (ronde: Wijkronde | null) => void;
+  /** Toon de oranje buurtgrens op de wijkronde-kaart (bewaard per apparaat). */
+  toonBuurtgrens: boolean;
+  setToonBuurtgrens: (toon: boolean) => void;
+
+  // Nader onderzoek
+  actiefTopicId: string | null;
+  setActiefTopicId: (id: string | null) => void;
+
+  // Profiel-weergave (los van de gebied-tabs)
+  profielOpen: boolean;
+  setProfielOpen: (open: boolean) => void;
+
+  // Favorieten (per gebruiker, uit Supabase)
+  favorieten: Favoriet[];
+  setFavorieten: (f: Favoriet[]) => void;
+  loadFavorieten: () => Promise<void>;
+  toggleFavoriet: (gebied: Gebied) => Promise<void>;
+  isFavoriet: (gebiedCode: string) => boolean;
 }
 
 // ── LocalStorage helpers ────────────────────────────────
@@ -324,4 +344,54 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
 
   actieveRonde: null,
   setActieveRonde: (ronde) => set({ actieveRonde: ronde }),
+
+  toonBuurtgrens: loadFromStorage<boolean>('bp_toonBuurtgrens') ?? true,
+  setToonBuurtgrens: (toon) => {
+    saveToStorage('bp_toonBuurtgrens', toon);
+    set({ toonBuurtgrens: toon });
+  },
+
+  actiefTopicId: null,
+  setActiefTopicId: (id) => set({ actiefTopicId: id }),
+
+  profielOpen: false,
+  setProfielOpen: (open) => set({ profielOpen: open }),
+
+  favorieten: [],
+  setFavorieten: (f) => set({ favorieten: f }),
+
+  loadFavorieten: async () => {
+    try {
+      const favorieten = await fetchFavorieten();
+      set({ favorieten });
+    } catch (error) {
+      logger.error('Fout bij laden favorieten:', error);
+    }
+  },
+
+  isFavoriet: (gebiedCode) => get().favorieten.some((f) => f.gebied_code === gebiedCode),
+
+  toggleFavoriet: async (gebied) => {
+    const current = get().favorieten;
+    const bestaat = current.some((f) => f.gebied_code === gebied.code);
+
+    if (bestaat) {
+      // Optimistic remove
+      set({ favorieten: current.filter((f) => f.gebied_code !== gebied.code) });
+      try {
+        await removeFavoriet(gebied.code);
+      } catch (error) {
+        logger.error('Fout bij verwijderen favoriet:', error);
+        set({ favorieten: current }); // rollback
+      }
+    } else {
+      // Optimistic add met tijdelijke placeholder; vervang door server-rij
+      try {
+        const nieuw = await addFavoriet(gebied);
+        set({ favorieten: [nieuw, ...get().favorieten] });
+      } catch (error) {
+        logger.error('Fout bij toevoegen favoriet:', error);
+      }
+    }
+  },
 }));

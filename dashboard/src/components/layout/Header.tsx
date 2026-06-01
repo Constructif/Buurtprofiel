@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useGebiedStore } from '../../store/gebiedStore';
 import { useAuthStore } from '../../store/authStore';
-import { supabase } from '../../services/supabase';
 import { GebiedSearch } from '../search/GebiedSearch';
 
 export function Header() {
   const { selectedGebied, clearSelectedGebied } = useGebiedStore();
+  const setProfielOpen = useGebiedStore((s) => s.setProfielOpen);
   const user = useAuthStore((s) => s.user);
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -76,13 +76,13 @@ export function Header() {
             )}
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
               <button
-                onClick={() => supabase.auth.signOut()}
+                onClick={() => setProfielOpen(true)}
                 style={{
                   background: 'none', border: '1px solid rgba(255,255,255,0.3)',
                   color: 'white', cursor: 'pointer', padding: '6px 12px', fontSize: '12px',
                 }}
               >
-                Uitloggen
+                Profiel
               </button>
               {user?.email && (
                 <span style={{ fontSize: '10px', color: 'rgba(255,255,255,0.7)' }}>
@@ -116,14 +116,14 @@ export function Header() {
               </svg>
             </button>
             <button
-              onClick={() => supabase.auth.signOut()}
+              onClick={() => setProfielOpen(true)}
               style={{
                 background: 'none', border: '1px solid rgba(255,255,255,0.3)',
                 color: 'white', cursor: 'pointer', padding: '5px 12px',
                 fontSize: '12px', borderRadius: '4px', flexShrink: 0,
               }}
             >
-              Uitloggen
+              Profiel
             </button>
           </div>
 

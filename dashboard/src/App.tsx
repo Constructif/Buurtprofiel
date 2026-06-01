@@ -6,7 +6,8 @@ import { useGebiedStore } from './store/gebiedStore';
 import { loadGebiedData } from './services/cbs';
 import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn, WerkInkomen, Leefomgeving } from './components/tabs/ruwe-data';
 import { WijkrondeTab } from './components/tabs/wijkronde';
-import { NaderOnderzoekPlaceholder } from './components/tabs/nader-onderzoek';
+import { NaderOnderzoekTab } from './components/tabs/nader-onderzoek';
+import { ProfielTab } from './components/tabs/profiel';
 import { useAuth } from './hooks/useAuth';
 import { logger } from './utils/logger';
 import { useAuthStore } from './store/authStore';
@@ -24,8 +25,15 @@ function App() {
   const selectedGebied = useGebiedStore(s => s.selectedGebied);
   const setGebiedData = useGebiedStore(s => s.setGebiedData);
   const setGemeenteData = useGebiedStore(s => s.setGemeenteData);
+  const profielOpen = useGebiedStore(s => s.profielOpen);
+  const loadFavorieten = useGebiedStore(s => s.loadFavorieten);
 
   const prevJaarRef = useRef(selectedJaar);
+
+  // Laad favorieten zodra de gebruiker is ingelogd
+  useEffect(() => {
+    if (session) loadFavorieten();
+  }, [session, loadFavorieten]);
 
   // Refetch data wanneer jaar verandert en er een gebied geselecteerd is
   useEffect(() => {
@@ -62,7 +70,7 @@ function App() {
       return <WijkrondeTab />;
     }
     if (mainTab === 'nader-onderzoek') {
-      return <NaderOnderzoekPlaceholder />;
+      return <NaderOnderzoekTab />;
     }
 
     // Ruwe data tabs
@@ -98,6 +106,20 @@ function App() {
 
   if (!session) {
     return <LoginPage />;
+  }
+
+  // Profiel-weergave: overschrijft het dashboard (zonder gebied-tabs)
+  if (profielOpen) {
+    return (
+      <div style={{ minHeight: '100vh', backgroundColor: '#f5f1ee' }}>
+        <Header />
+        <main className="main-content" style={{ maxWidth: '1800px', margin: '0 auto', padding: '24px' }}>
+          <ErrorBoundary>
+            <ProfielTab />
+          </ErrorBoundary>
+        </main>
+      </div>
+    );
   }
 
   // Tab key voor fade-transitie bij wissel

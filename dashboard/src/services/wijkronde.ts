@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { Wijkronde, Wijkobservatie, WijkrondeAntwoord, ObservatieCategorie } from '../types/wijkronde';
+import type { Wijkronde, Wijkobservatie, WijkrondeAntwoord, ObservatieCategorie, GebiedPolygon } from '../types/wijkronde';
 
 // ── Rondes ──────────────────────────────────────────────
 
@@ -43,6 +43,52 @@ export async function sluitRonde(rondeId: string): Promise<void> {
     .eq('id', rondeId);
 
   if (error) throw error;
+}
+
+/** Sluit de vragenlijst af: leg observator + tijdstip statisch vast. */
+export async function vragenOpslaan(rondeId: string, observator: string): Promise<Wijkronde> {
+  const { data, error } = await supabase
+    .from('wijkrondes')
+    .update({
+      vragen_opgeslagen: true,
+      vragen_observator: observator,
+      vragen_opgeslagen_at: new Date().toISOString(),
+    })
+    .eq('id', rondeId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/** Heropen de vragenlijst voor bewerking. Observator + tijdstip blijven bewaard. */
+export async function vragenHeropenen(rondeId: string): Promise<Wijkronde> {
+  const { data, error } = await supabase
+    .from('wijkrondes')
+    .update({ vragen_opgeslagen: false })
+    .eq('id', rondeId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+/** Sla het afgebakende gebied (polygoon) op voor een ronde. `null` wist het gebied. */
+export async function updateRondeGebied(
+  rondeId: string,
+  gebied: GebiedPolygon | null,
+): Promise<Wijkronde> {
+  const { data, error } = await supabase
+    .from('wijkrondes')
+    .update({ gebied_polygon: gebied })
+    .eq('id', rondeId)
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function deleteRonde(rondeId: string): Promise<void> {
@@ -172,6 +218,7 @@ export async function upsertAntwoord(params: {
   ronde_id: string;
   vraag_id: string;
   antwoord: string;
+  notitie?: string | null;
 }): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new Error('Niet ingelogd');

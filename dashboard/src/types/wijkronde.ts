@@ -8,6 +8,11 @@ export type ObservatieCategorie =
 
 export type RondeStatus = 'actief' | 'afgerond';
 
+/** Het tijdens de ronde afgebakende gebied. Punten in [lat, lng]-volgorde (Leaflet). */
+export interface GebiedPolygon {
+  punten: [number, number][];
+}
+
 export interface Wijkronde {
   id: string;
   buurtcode: string;
@@ -17,6 +22,10 @@ export interface Wijkronde {
   aantal_observaties: number;
   started_at: string;
   finished_at: string | null;
+  vragen_opgeslagen: boolean;
+  vragen_observator: string | null;
+  vragen_opgeslagen_at: string | null;
+  gebied_polygon: GebiedPolygon | null;
 }
 
 export interface Wijkobservatie {
@@ -56,6 +65,7 @@ export interface WijkrondeAntwoord {
   ronde_id: string;
   vraag_id: string;
   antwoord: string;
+  notitie: string | null;
   medewerker: string;
   created_at: string;
 }

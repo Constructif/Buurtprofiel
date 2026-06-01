@@ -8,6 +8,7 @@ import { sanitizeText } from '../../../utils/sanitize';
 interface ObservatieDetailProps {
   observatie: Wijkobservatie;
   onClose: () => void;
+  /** Wordt aangeroepen wanneer de observatie gewijzigd/verwijderd is, zodat de lijst kan verversen. */
   onUpdated: () => void;
 }
 
@@ -17,6 +18,12 @@ interface FotoItem {
 }
 
 export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieDetailProps) {
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const [editMode, setEditMode] = useState(false);
+  // Lokale "weergave"-waarden zodat na opslaan de leesmodus direct klopt zonder sheet te sluiten.
+  const [savedCategorie, setSavedCategorie] = useState<ObservatieCategorie>(observatie.categorie);
+  const [savedOpmerking, setSavedOpmerking] = useState(observatie.opmerking || '');
+
   const [categorie, setCategorie] = useState<ObservatieCategorie>(observatie.categorie);
   const [opmerking, setOpmerking] = useState(observatie.opmerking || '');
   const [fotos, setFotos] = useState<FotoItem[]>([]);
@@ -47,6 +54,13 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
   useEffect(() => {
     document.body.style.overflow = 'hidden';
     return () => { document.body.style.overflow = ''; };
+  }, []);
+
+  // Responsive: desktop = gecentreerde modal, mobiel = bottom sheet
+  useEffect(() => {
+    const handleResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
   }, []);
 
   const currentPaths = () => fotos.map(f => f.path);
@@ -84,6 +98,7 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
       await updateObservatie(observatie.id, {
         foto_path: serializeFotoPaths(newFotos.map(f => f.path)),
       });
+      onUpdated();
     } catch {
       setError('Foto uploaden mislukt');
     } finally {
@@ -102,6 +117,7 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
       await updateObservatie(observatie.id, {
         foto_path: serializeFotoPaths(newFotos.map(f => f.path)),
       });
+      onUpdated();
     } catch {
       setError('Foto verwijderen mislukt');
     }
@@ -111,11 +127,16 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
     setIsSaving(true);
     setError(null);
     try {
+      const schoonOpmerking = sanitizeText(opmerking).trim() || null;
       await updateObservatie(observatie.id, {
         categorie,
-        opmerking: sanitizeText(opmerking).trim() || null,
+        opmerking: schoonOpmerking,
         foto_path: serializeFotoPaths(currentPaths()),
       });
+      // Werk leesmodus bij en schakel terug naar weergave (sheet blijft open)
+      setSavedCategorie(categorie);
+      setSavedOpmerking(schoonOpmerking || '');
+      setEditMode(false);
       onUpdated();
     } catch {
       setError('Opslaan mislukt');
@@ -133,14 +154,30 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
       }
       await deleteObservatie(observatie.id);
       onUpdated();
+      onClose();
     } catch {
       setError('Verwijderen mislukt');
       setIsDeleting(false);
     }
   };
 
-  const hasChanges = categorie !== observatie.categorie
-    || (opmerking.trim() || null) !== (observatie.opmerking || null);
+  const startEdit = () => {
+    // Begin vanaf de laatst opgeslagen waarden
+    setCategorie(savedCategorie);
+    setOpmerking(savedOpmerking);
+    setConfirmDelete(false);
+    setError(null);
+    setEditMode(true);
+  };
+
+  const cancelEdit = () => {
+    setConfirmDelete(false);
+    setError(null);
+    setEditMode(false);
+  };
+
+  const hasChanges = categorie !== savedCategorie
+    || (opmerking.trim() || null) !== (savedOpmerking || null);
 
   return (
     <>
@@ -162,30 +199,41 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
         </div>
       )}
 
-      {/* Backdrop */}
+      {/* Backdrop — op desktop tevens flex-container die de modal centreert */}
       <div
         onClick={onClose}
         style={{
           position: 'fixed', inset: 0,
           backgroundColor: 'rgba(0,0,0,0.4)', zIndex: 999,
+          ...(isMobile ? {} : {
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '24px',
+          }),
         }}
-      />
-
-      {/* Detail sheet */}
-      <div style={{
-        position: 'fixed', bottom: 0, left: 0, right: 0,
-        backgroundColor: '#fff', borderRadius: '16px 16px 0 0',
-        zIndex: 1000, maxHeight: '90vh', overflowY: 'auto',
-        WebkitOverflowScrolling: 'touch',
-        boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
-        touchAction: 'pan-y', overscrollBehavior: 'contain',
-        padding: '20px',
-        paddingBottom: `calc(20px + env(safe-area-inset-bottom, 0px))`,
-      }}>
+      >
+      {/* Detail sheet (mobiel) / modal (desktop) */}
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={isMobile ? {
+          position: 'fixed', bottom: 0, left: 0, right: 0,
+          backgroundColor: '#fff', borderRadius: '16px 16px 0 0',
+          zIndex: 1000, maxHeight: '90vh', overflowY: 'auto',
+          WebkitOverflowScrolling: 'touch',
+          boxShadow: '0 -4px 20px rgba(0,0,0,0.15)',
+          touchAction: 'pan-y', overscrollBehavior: 'contain',
+          padding: '20px',
+          paddingBottom: `calc(20px + env(safe-area-inset-bottom, 0px))`,
+        } : {
+          backgroundColor: '#fff', borderRadius: '16px',
+          width: '100%', maxWidth: '600px', maxHeight: '90vh',
+          overflowY: 'auto',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+          padding: '24px',
+        }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
           <h3 style={{ fontSize: '18px', fontWeight: 600, color: '#1d1d1b', margin: 0 }}>
-            Observatie bewerken
+            {editMode ? 'Observatie bewerken' : 'Observatie'}
           </h3>
           <button
             onClick={onClose}
@@ -198,6 +246,94 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
           </button>
         </div>
 
+        {editMode ? renderEditMode() : renderViewMode()}
+      </div>
+      </div>
+    </>
+  );
+
+  function renderViewMode() {
+    return (
+      <>
+        {/* Foto's groot */}
+        {loadingFotos ? (
+          <p style={{ color: '#9ca3af', fontSize: '13px', marginBottom: '12px' }}>Foto's laden...</p>
+        ) : fotos.length > 0 ? (
+          <div style={{
+            display: 'flex', gap: '8px', overflowX: 'auto',
+            paddingBottom: '8px', marginBottom: '16px',
+            WebkitOverflowScrolling: 'touch',
+          }}>
+            {fotos.map((foto, i) => (
+              <img
+                key={foto.path}
+                src={foto.url}
+                alt={`Foto ${i + 1}`}
+                onClick={() => setFullscreenFoto(foto.url)}
+                style={{
+                  width: fotos.length === 1 ? '100%' : '85%',
+                  maxWidth: fotos.length === 1 ? '100%' : '340px',
+                  height: 'auto', maxHeight: '70vh',
+                  objectFit: 'contain', borderRadius: '12px',
+                  backgroundColor: '#f3f4f6',
+                  cursor: 'pointer', flexShrink: 0,
+                }}
+              />
+            ))}
+          </div>
+        ) : (
+          <p style={{ color: '#9ca3af', fontSize: '13px', marginBottom: '16px' }}>Geen foto's.</p>
+        )}
+
+        {/* Categorie label */}
+        <span style={{
+          fontSize: '12px', fontWeight: 600,
+          color: CATEGORIE_KLEUREN[savedCategorie],
+          display: 'inline-block', padding: '4px 10px',
+          backgroundColor: `${CATEGORIE_KLEUREN[savedCategorie]}15`,
+          borderRadius: '6px', marginBottom: '12px',
+        }}>
+          {savedCategorie}
+        </span>
+
+        {/* Omschrijving */}
+        {savedOpmerking ? (
+          <p style={{ fontSize: '15px', color: '#1d1d1b', lineHeight: 1.5, margin: '0 0 16px', whiteSpace: 'pre-wrap' }}>
+            {savedOpmerking}
+          </p>
+        ) : (
+          <p style={{ fontSize: '14px', color: '#9ca3af', fontStyle: 'italic', margin: '0 0 16px' }}>
+            Geen omschrijving.
+          </p>
+        )}
+
+        {/* Locatie + datum */}
+        <p style={{ fontSize: '12px', color: '#9ca3af', marginBottom: '16px' }}>
+          {observatie.lat.toFixed(5)}, {observatie.lng.toFixed(5)} — {new Date(observatie.created_at).toLocaleString('nl-NL')}
+        </p>
+
+        {error && (
+          <p style={{ color: '#c0392b', fontSize: '13px', marginBottom: '12px' }}>{error}</p>
+        )}
+
+        {/* Bewerken */}
+        <button
+          onClick={startEdit}
+          style={{
+            width: '100%', padding: '14px', border: 'none', borderRadius: '8px',
+            backgroundColor: '#eb6608', color: '#fff', cursor: 'pointer',
+            fontSize: '14px', fontWeight: 600, minHeight: '48px',
+          }}
+        >
+          Bewerken
+        </button>
+      </>
+    );
+  }
+
+  function renderEditMode() {
+    return (
+      <>
         {/* Foto's */}
         <label style={{ fontSize: '13px', fontWeight: 500, color: '#374151', marginBottom: '8px', display: 'block' }}>
           Foto's ({fotos.length})
@@ -321,6 +457,18 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
         {/* Acties */}
         <div style={{ display: 'flex', gap: '8px', marginBottom: '12px' }}>
           <button
+            onClick={cancelEdit}
+            disabled={isSaving}
+            style={{
+              padding: '14px 20px', border: '1px solid #d1d5db', borderRadius: '8px',
+              backgroundColor: '#fff', color: '#374151',
+              cursor: isSaving ? 'default' : 'pointer',
+              fontSize: '14px', fontWeight: 500, minHeight: '48px',
+            }}
+          >
+            Annuleren
+          </button>
+          <button
             onClick={handleSave}
             disabled={isSaving || !hasChanges}
             style={{
@@ -371,7 +519,7 @@ export function ObservatieDetail({ observatie, onClose, onUpdated }: ObservatieD
             Observatie verwijderen
           </button>
         )}
-      </div>
-    </>
-  );
+      </>
+    );
+  }
 }
