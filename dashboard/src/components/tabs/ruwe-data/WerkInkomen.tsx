@@ -1,10 +1,11 @@
 import { useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
+import { SelectableWrapper } from '../../ui/SelectableCard';
 import type { UitkeringenData } from '../../../types/werkInkomen';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenWerkInkomenScore } from '../../../utils/scoring';
-import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
 import { fetchKerncijfersForYear, fetchKerncijfersAllYears } from '../../../services/cbs';
 import { useCardYear } from '../../../hooks/useCardYear';
 import { CardTrendChart } from '../../ui/CardTrendChart';
@@ -19,24 +20,6 @@ import {
   Pie,
   Cell
 } from 'recharts';
-
-// NL Referentiewaarden (CBS kerncijfers 85984NED + 86052NED + 85618NED)
-const NL_REFERENTIES = {
-  // Inkomen (CBS definitie: 40% laagste / 20% hoogste inkomensverdeling)
-  gemiddeldInkomen: 37200,
-  laagInkomen: 40.0,   // 40% personen met laagste inkomen (D000187)
-  hoogInkomen: 20.0,   // 20% personen met hoogste inkomen (D000185)
-  // Opleiding 15-75 jaar (CBS 86052NED, NL01, berekend: count/totaal*100)
-  opleidingLaag: 26.3,    // 3.537.840 / 13.471.360 (basisonderwijs, vmbo, mbo1)
-  opleidingMidden: 41.2,  // 5.554.700 / 13.471.360 (havo, vwo, mbo2-4)
-  opleidingHoog: 32.5,    // 4.378.820 / 13.471.360 (hbo, wo)
-  // Werkgelegenheid (CBS 85618NED, NL00, 2023)
-  arbeidsparticipatie: 71.0,
-  // Uitkeringen per 1000 inwoners (CBS 85984NED, NL00, berekend: count/bevolking*1000)
-  bijstandPer1000: 23,    // 405.560 / 17.942.942 * 1000 = 22.6 → afgerond 23
-  wwPer1000: 9,           // 158.400 / 17.942.942 * 1000 = 8.8 → afgerond 9
-  aoPer1000: 44,          // 785.330 / 17.942.942 * 1000 = 43.8 → afgerond 44
-};
 
 // Kleuren
 const COLORS = {
@@ -81,7 +64,10 @@ function calcPer1000(value: number | null, bevolking: number): number | null {
 }
 
 export function WerkInkomen() {
-  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData } = useGebiedStore();
+
+  // Actieve benchmarks: schakelt mee met de Nederland/gemeente-toggle.
+  const { set: benchmarksWI, ref, refNaamVoor, benchmarkNaam } = useActiveBenchmarks();
 
   // Alle hooks MOETEN boven early returns staan (React hooks regels)
   const code = gebiedData?.code ?? '';
@@ -146,78 +132,97 @@ export function WerkInkomen() {
   const hoogInkomen = inkomen.hoogInkomenPercentage;
   const middenInkomen = (laagInkomen && hoogInkomen) ? Math.max(0, 100 - laagInkomen - hoogInkomen) : null;
 
-  // Aandachtspunten samenstellen
+  // Aandachtspunten samenstellen (referentiewaarden schakelen mee met de toggle)
   const aandachtspunten = [
-    { label: 'Gemiddeld inkomen', value: inkomen.gemiddeld, nlWaarde: NL_REFERENTIES.gemiddeldInkomen, key: 'gemiddeldInkomen', unit: 'EUR', isEuro: true },
-    { label: 'Laag inkomen', value: laagInkomen, nlWaarde: NL_REFERENTIES.laagInkomen, key: 'laagInkomen', unit: '%' },
-    { label: 'Arbeidsparticipatie', value: werkInkomen?.werkgelegenheid.arbeidsparticipatie ?? null, nlWaarde: NL_REFERENTIES.arbeidsparticipatie, key: 'arbeidsparticipatie', unit: '%' },
-    { label: 'Laag opgeleid', value: werkInkomen?.opleiding.laag ?? null, nlWaarde: NL_REFERENTIES.opleidingLaag, key: 'opleidingLaag', unit: '%' },
-    { label: 'Hoog opgeleid', value: werkInkomen?.opleiding.hoog ?? null, nlWaarde: NL_REFERENTIES.opleidingHoog, key: 'opleidingHoog', unit: '%' },
+    { label: 'Gemiddeld inkomen', value: inkomen.gemiddeld, nlWaarde: ref('gemiddeldInkomen'), refNaam: refNaamVoor('gemiddeldInkomen'), key: 'gemiddeldInkomen', unit: 'EUR', isEuro: true },
+    { label: 'Laag inkomen', value: laagInkomen, nlWaarde: ref('laagInkomen'), refNaam: refNaamVoor('laagInkomen'), key: 'laagInkomen', unit: '%' },
+    { label: 'Arbeidsparticipatie', value: werkInkomen?.werkgelegenheid.arbeidsparticipatie ?? null, nlWaarde: ref('arbeidsparticipatie'), refNaam: refNaamVoor('arbeidsparticipatie'), key: 'arbeidsparticipatie', unit: '%' },
+    { label: 'Laag opgeleid', value: werkInkomen?.opleiding.laag ?? null, nlWaarde: ref('opleidingLaag'), refNaam: refNaamVoor('opleidingLaag'), key: 'opleidingLaag', unit: '%' },
+    { label: 'Hoog opgeleid', value: werkInkomen?.opleiding.hoog ?? null, nlWaarde: ref('opleidingHoog'), refNaam: refNaamVoor('opleidingHoog'), key: 'opleidingHoog', unit: '%' },
   ];
 
-  // Tab score berekening
-  const benchmarksWI = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
-    ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
-    : NL_BENCHMARKS;
+  // Tab score berekening met dezelfde actieve benchmarks
   const tabScore = berekenWerkInkomenScore(gebiedData, benchmarksWI);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <TabScoreHeader tabScore={tabScore} />
       {/* Aandachtspunten */}
-      <AandachtspuntenCard punten={aandachtspunten} />
+      <AandachtspuntenCard punten={aandachtspunten} benchmarkNaam={benchmarkNaam} />
 
       {/* Inkomen Card */}
-      {inkomenCard.activeMode === 'trend' && inkomenCard.trendData ? (
-        <Card title="Inkomen Trend" badge="data" year={jaar}
-          onYearChange={inkomenCard.handleYearChange} availableYears={inkomenCard.availableYears}
-          activeYearMode={inkomenCard.activeMode} yearsWithData={inkomenCard.yearsWithData}>
-          <CardTrendChart
-            data={inkomenCard.trendData}
-            lines={[{ key: 'inkomen', label: 'Gem. inkomen (€)', color: '#eb6608' }]}
+      <SelectableWrapper sectionId="economie-inkomen">
+        {inkomenCard.activeMode === 'trend' && inkomenCard.trendData ? (
+          <Card title="Inkomen Trend" badge="data" year={jaar}
+            onYearChange={inkomenCard.handleYearChange} availableYears={inkomenCard.availableYears}
+            activeYearMode={inkomenCard.activeMode} yearsWithData={inkomenCard.yearsWithData}>
+            <CardTrendChart
+              data={inkomenCard.trendData}
+              lines={[{ key: 'inkomen', label: 'Gem. inkomen (€)', color: '#eb6608' }]}
+            />
+          </Card>
+        ) : (
+          <InkomenCard
+            gemiddeld={inkomen.gemiddeld}
+            laag={laagInkomen}
+            midden={middenInkomen}
+            hoog={hoogInkomen}
+            refGemiddeld={ref('gemiddeldInkomen')}
+            refLaag={ref('laagInkomen')}
+            refHoog={ref('hoogInkomen')}
+            refNaam={benchmarkNaam}
+            jaar={jaar}
+            onYearChange={inkomenCard.handleYearChange}
+            availableYears={inkomenCard.availableYears}
+            activeYearMode={inkomenCard.activeMode}
+            yearsWithData={inkomenCard.yearsWithData}
           />
-        </Card>
-      ) : (
-        <InkomenCard
-          gemiddeld={inkomen.gemiddeld}
-          laag={laagInkomen}
-          midden={middenInkomen}
-          hoog={hoogInkomen}
-          jaar={jaar}
-          onYearChange={inkomenCard.handleYearChange}
-          availableYears={inkomenCard.availableYears}
-          activeYearMode={inkomenCard.activeMode}
-          yearsWithData={inkomenCard.yearsWithData}
-        />
-      )}
+        )}
+      </SelectableWrapper>
 
       {/* Grid: Opleiding + Werkgelegenheid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-        <OpleidingsniveauCard
-          data={werkInkomen?.opleiding ?? null}
-          jaar={jaar}
-          gebiedType={selectedGebied.type}
-          isGemeenteData={werkInkomen?.opleidingIsGemeenteData}
-        />
-        <WerkgelegenheidCard
-          data={werkInkomen?.werkgelegenheid ?? null}
-          gebiedType={selectedGebied.type}
-          isGemeenteData={werkInkomen?.werkgelegenheidIsGemeenteData}
-          gemeenteNaam={werkInkomen?.werkgelegenheidGemeenteNaam}
-        />
+        <SelectableWrapper sectionId="economie-opleiding">
+          <OpleidingsniveauCard
+            data={werkInkomen?.opleiding ?? null}
+            jaar={jaar}
+            gebiedType={selectedGebied.type}
+            isGemeenteData={werkInkomen?.opleidingIsGemeenteData}
+            refLaag={ref('opleidingLaag')}
+            refMidden={ref('opleidingMidden')}
+            refHoog={ref('opleidingHoog')}
+            refNaam={benchmarkNaam}
+          />
+        </SelectableWrapper>
+        <SelectableWrapper sectionId="economie-werk">
+          <WerkgelegenheidCard
+            data={werkInkomen?.werkgelegenheid ?? null}
+            gebiedType={selectedGebied.type}
+            isGemeenteData={werkInkomen?.werkgelegenheidIsGemeenteData}
+            gemeenteNaam={werkInkomen?.werkgelegenheidGemeenteNaam}
+            refArbeidsparticipatie={ref('arbeidsparticipatie')}
+            refNaam={benchmarkNaam}
+          />
+        </SelectableWrapper>
       </div>
 
       {/* Uitkeringen */}
-      <UitkeringenCard
-        data={werkInkomen?.uitkeringen ?? null}
-        bevolking={gebiedData.bevolking.totaal}
-        jaar={uitkeringenJaar}
-        gebiedType={selectedGebied.type}
-        onYearChange={uitkeringenCard.handleYearChange}
-        availableYears={uitkeringenCard.availableYears}
-        activeYearMode={uitkeringenCard.activeMode}
-        yearsWithData={uitkeringenCard.yearsWithData}
-      />
+      <SelectableWrapper sectionId="economie-uitkeringen">
+        <UitkeringenCard
+          data={werkInkomen?.uitkeringen ?? null}
+          bevolking={gebiedData.bevolking.totaal}
+          jaar={uitkeringenJaar}
+          gebiedType={selectedGebied.type}
+          refBijstandPer1000={ref('bijstandPer1000')}
+          refWwPer1000={ref('wwPer1000')}
+          refAoPer1000={ref('aoPer1000')}
+          refNaam={benchmarkNaam}
+          onYearChange={uitkeringenCard.handleYearChange}
+          availableYears={uitkeringenCard.availableYears}
+          activeYearMode={uitkeringenCard.activeMode}
+          yearsWithData={uitkeringenCard.yearsWithData}
+        />
+      </SelectableWrapper>
     </div>
   );
 }
@@ -228,13 +233,14 @@ export function WerkInkomen() {
 interface Aandachtspunt {
   label: string;
   value: number | null;
-  nlWaarde: number;
+  nlWaarde: number;       // referentiewaarde (NL of gemeente, afhankelijk van toggle)
+  refNaam: string;        // "Nederland" of gemeentenaam voor dit punt
   key: string;
   unit: string;
   isEuro?: boolean;
 }
 
-function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
+function AandachtspuntenCard({ punten, benchmarkNaam }: { punten: Aandachtspunt[]; benchmarkNaam: string }) {
   const sorted = [...punten]
     .filter(p => p.value !== null)
     .map(p => ({
@@ -253,7 +259,7 @@ function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
   if (sorted.length === 0) return null;
 
   return (
-    <Card title="Aandachtspunten" badge="info" badgeText="Vergelijking met NL">
+    <Card title="Aandachtspunten" badge="info" badgeText={`Vergelijking met ${benchmarkNaam}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {sorted.map(punt => {
           const isProbleem = !HOGER_IS_BETER.includes(punt.key) ? punt.diff > 5 : punt.diff < -5;
@@ -291,7 +297,7 @@ function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
                 minWidth: '90px',
                 textAlign: 'right'
               }}>
-                {diffDisplay} t.o.v. NL
+                {diffDisplay} t.o.v. {punt.refNaam === 'Nederland' ? 'NL' : punt.refNaam}
               </span>
             </div>
           );
@@ -307,6 +313,10 @@ function InkomenCard({
   laag,
   midden,
   hoog,
+  refGemiddeld,
+  refLaag,
+  refHoog,
+  refNaam,
   jaar,
   onYearChange,
   availableYears,
@@ -317,12 +327,17 @@ function InkomenCard({
   laag: number | null;
   midden: number | null;
   hoog: number | null;
+  refGemiddeld: number;
+  refLaag: number;
+  refHoog: number;
+  refNaam: string;
   jaar: number;
   onYearChange?: (jaar: number | 'trend') => void;
   availableYears?: number[];
   activeYearMode?: number | 'trend';
   yearsWithData?: number[];
 }) {
+  const refLabelKort = refNaam === 'Nederland' ? 'NL' : refNaam;
   const inkomenData = [
     { name: 'Laag inkomen', value: laag ?? 0, color: COLORS.red },
     { name: 'Midden inkomen', value: midden ?? 0, color: COLORS.amber },
@@ -356,7 +371,7 @@ function InkomenCard({
           <div style={{ textAlign: 'center', minWidth: '160px' }}>
             <div style={{ lineHeight: 1 }}>
               {gemiddeld !== null ? (
-                <span style={{ fontSize: '42px', fontWeight: 700, color: getKpiColor(gemiddeld, NL_REFERENTIES.gemiddeldInkomen, 'gemiddeldInkomen') }}>
+                <span style={{ fontSize: '42px', fontWeight: 700, color: getKpiColor(gemiddeld, refGemiddeld, 'gemiddeldInkomen') }}>
                   {formatCurrency(gemiddeld)}
                 </span>
               ) : (
@@ -369,15 +384,15 @@ function InkomenCard({
               gemiddeld besteedbaar inkomen
             </p>
             <p style={{ color: '#9ca3af', fontSize: '11px', marginTop: '2px' }}>
-              (NL: {formatCurrency(NL_REFERENTIES.gemiddeldInkomen)})
+              ({refLabelKort}: {formatCurrency(refGemiddeld)})
             </p>
           </div>
 
           {/* Sub KPIs */}
           <div style={{ display: 'flex', gap: '12px', flex: 1, flexWrap: 'wrap' }}>
-            <KpiBox label="Laag inkomen" value={laag} nlWaarde={NL_REFERENTIES.laagInkomen} kpiKey="laagInkomen" />
-            <KpiBox label="Midden inkomen" value={midden} nlWaarde={100 - NL_REFERENTIES.laagInkomen - NL_REFERENTIES.hoogInkomen} kpiKey="middenInkomen" />
-            <KpiBox label="Hoog inkomen" value={hoog} nlWaarde={NL_REFERENTIES.hoogInkomen} kpiKey="hoogInkomen" />
+            <KpiBox label="Laag inkomen" value={laag} nlWaarde={refLaag} kpiKey="laagInkomen" refNaam={refNaam} />
+            <KpiBox label="Midden inkomen" value={midden} nlWaarde={100 - refLaag - refHoog} kpiKey="middenInkomen" refNaam={refNaam} />
+            <KpiBox label="Hoog inkomen" value={hoog} nlWaarde={refHoog} kpiKey="hoogInkomen" refNaam={refNaam} />
           </div>
         </div>
 
@@ -472,19 +487,28 @@ function OpleidingsniveauCard({
   data,
   jaar,
   gebiedType,
-  isGemeenteData
+  isGemeenteData,
+  refLaag,
+  refMidden,
+  refHoog,
+  refNaam,
 }: {
   data: { laag: number | null; midden: number | null; hoog: number | null } | null;
   jaar: number;
   gebiedType: 'buurt' | 'wijk' | 'gemeente';
   isGemeenteData?: boolean;
+  refLaag: number;
+  refMidden: number;
+  refHoog: number;
+  refNaam: string;
 }) {
   const hasData = data && (data.laag !== null || data.midden !== null || data.hoog !== null);
+  const refLabelKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   const barData = hasData ? [
-    { name: 'Laag', value: data.laag ?? 0, nlWaarde: NL_REFERENTIES.opleidingLaag, color: COLORS.red },
-    { name: 'Midden', value: data.midden ?? 0, nlWaarde: NL_REFERENTIES.opleidingMidden, color: COLORS.amber },
-    { name: 'Hoog', value: data.hoog ?? 0, nlWaarde: NL_REFERENTIES.opleidingHoog, color: COLORS.green },
+    { name: 'Laag', value: data.laag ?? 0, nlWaarde: refLaag, color: COLORS.red },
+    { name: 'Midden', value: data.midden ?? 0, nlWaarde: refMidden, color: COLORS.amber },
+    { name: 'Hoog', value: data.hoog ?? 0, nlWaarde: refHoog, color: COLORS.green },
   ].filter(d => d.value > 0) : [];
 
   // Badge text met gemeente indicatie als fallback wordt gebruikt
@@ -514,7 +538,7 @@ function OpleidingsniveauCard({
             <svg width="16" height="8">
               <line x1="0" y1="4" x2="16" y2="4" stroke="#1d1d1b" strokeWidth="2" strokeDasharray="4 2" />
             </svg>
-            <span>NL gemiddelde</span>
+            <span>{refLabelKort} gemiddelde</span>
           </div>
           {/* Vertical Bar Chart - vult beschikbare ruimte en zit aan onderkant */}
           {barData.length > 0 && (
@@ -543,7 +567,7 @@ function OpleidingsniveauCard({
                       const payload = props.payload as { nlWaarde: number; name: string };
                       const diff = (value as number) - payload.nlWaarde;
                       const diffStr = diff >= 0 ? `+${diff.toFixed(1)}` : diff.toFixed(1);
-                      return [`${(value as number).toFixed(1)}% (${diffStr} t.o.v. NL)`, payload.name];
+                      return [`${(value as number).toFixed(1)}% (${diffStr} t.o.v. ${refLabelKort})`, payload.name];
                     }}
                     contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', fontSize: '12px', borderRadius: '6px' }}
                   />
@@ -572,7 +596,9 @@ function WerkgelegenheidCard({
   data,
   gebiedType,
   isGemeenteData,
-  gemeenteNaam
+  gemeenteNaam,
+  refArbeidsparticipatie,
+  refNaam,
 }: {
   data: {
     arbeidsparticipatie: number | null;
@@ -584,8 +610,11 @@ function WerkgelegenheidCard({
   gebiedType: 'buurt' | 'wijk' | 'gemeente';
   isGemeenteData?: boolean;
   gemeenteNaam?: string;
+  refArbeidsparticipatie: number;
+  refNaam: string;
 }) {
   const hasData = data && data.arbeidsparticipatie !== null;
+  const refLabelKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   const werkzaamData = data && (data.werknemers !== null || data.zelfstandigen !== null) ? [
     { name: 'Werknemers', value: data.werknemers ?? 0, color: COLORS.primary },
@@ -616,7 +645,7 @@ function WerkgelegenheidCard({
                 <span style={{
                   fontSize: '42px',
                   fontWeight: 700,
-                  color: getKpiColor(data.arbeidsparticipatie, NL_REFERENTIES.arbeidsparticipatie, 'arbeidsparticipatie')
+                  color: getKpiColor(data.arbeidsparticipatie, refArbeidsparticipatie, 'arbeidsparticipatie')
                 }}>
                   {data.arbeidsparticipatie?.toFixed(1)}
                 </span>
@@ -626,7 +655,7 @@ function WerkgelegenheidCard({
                 netto arbeidsparticipatie
               </p>
               <p style={{ color: '#9ca3af', fontSize: '10px' }}>
-                (NL: {NL_REFERENTIES.arbeidsparticipatie}%)
+                ({refLabelKort}: {refArbeidsparticipatie.toFixed(1)}%)
               </p>
             </div>
 
@@ -713,6 +742,10 @@ function UitkeringenCard({
   bevolking,
   jaar,
   gebiedType,
+  refBijstandPer1000,
+  refWwPer1000,
+  refAoPer1000,
+  refNaam,
   onYearChange,
   availableYears,
   activeYearMode,
@@ -722,12 +755,17 @@ function UitkeringenCard({
   bevolking: number;
   jaar: number;
   gebiedType: 'buurt' | 'wijk' | 'gemeente';
+  refBijstandPer1000: number;
+  refWwPer1000: number;
+  refAoPer1000: number;
+  refNaam: string;
   onYearChange?: (jaar: number | 'trend') => void;
   availableYears?: number[];
   activeYearMode?: number | 'trend';
   yearsWithData?: number[];
 }) {
   const hasData = data && (data.bijstand !== null || data.ww !== null || data.ao !== null || data.aow !== null);
+  const refLabelKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   // Bereken per 1000 inwoners
   const bijstandPer1000 = calcPer1000(data?.bijstand ?? null, bevolking);
@@ -736,9 +774,9 @@ function UitkeringenCard({
   const aowPer1000 = calcPer1000(data?.aow ?? null, bevolking);
 
   const barData = hasData && data ? [
-    { name: 'Bijstand', aantal: data.bijstand ?? 0, per1000: bijstandPer1000 ?? 0, nlPer1000: NL_REFERENTIES.bijstandPer1000, color: COLORS.red },
-    { name: 'WW', aantal: data.ww ?? 0, per1000: wwPer1000 ?? 0, nlPer1000: NL_REFERENTIES.wwPer1000, color: COLORS.amber },
-    { name: 'AO', aantal: data.ao ?? 0, per1000: aoPer1000 ?? 0, nlPer1000: NL_REFERENTIES.aoPer1000, color: COLORS.purple },
+    { name: 'Bijstand', aantal: data.bijstand ?? 0, per1000: bijstandPer1000 ?? 0, nlPer1000: refBijstandPer1000, color: COLORS.red },
+    { name: 'WW', aantal: data.ww ?? 0, per1000: wwPer1000 ?? 0, nlPer1000: refWwPer1000, color: COLORS.amber },
+    { name: 'AO', aantal: data.ao ?? 0, per1000: aoPer1000 ?? 0, nlPer1000: refAoPer1000, color: COLORS.purple },
     { name: 'AOW', aantal: data.aow ?? 0, per1000: aowPer1000 ?? 0, nlPer1000: null, color: COLORS.blue },
   ].filter(d => d.aantal > 0) : [];
 
@@ -769,9 +807,9 @@ function UitkeringenCard({
                       const lines = [
                         `${formatNumber(value as number)} personen (${payload.per1000?.toFixed(1) ?? '-'} per 1000 inw.)`
                       ];
-                      // Alleen NL-vergelijking tonen als beschikbaar (niet voor AOW)
+                      // Alleen vergelijking tonen als beschikbaar (niet voor AOW)
                       if (payload.nlPer1000 !== null) {
-                        lines.push(`NL: ${payload.nlPer1000} per 1000`);
+                        lines.push(`${refLabelKort}: ${payload.nlPer1000.toFixed(1)} per 1000`);
                       }
                       return lines;
                     }}
@@ -794,7 +832,8 @@ function UitkeringenCard({
               description="Participatiewet"
               aantal={data.bijstand}
               per1000={bijstandPer1000}
-              nlPer1000={NL_REFERENTIES.bijstandPer1000}
+              nlPer1000={refBijstandPer1000}
+              refNaam={refNaam}
               color={COLORS.red}
             />
             <UitkeringBox
@@ -802,7 +841,8 @@ function UitkeringenCard({
               description="Werkloosheid"
               aantal={data.ww}
               per1000={wwPer1000}
-              nlPer1000={NL_REFERENTIES.wwPer1000}
+              nlPer1000={refWwPer1000}
+              refNaam={refNaam}
               color={COLORS.amber}
             />
             <UitkeringBox
@@ -810,7 +850,8 @@ function UitkeringenCard({
               description="Arbeidsongeschiktheid"
               aantal={data.ao}
               per1000={aoPer1000}
-              nlPer1000={NL_REFERENTIES.aoPer1000}
+              nlPer1000={refAoPer1000}
+              refNaam={refNaam}
               color={COLORS.purple}
             />
             {data.aow !== null && (
@@ -820,6 +861,7 @@ function UitkeringenCard({
                 aantal={data.aow}
                 per1000={aowPer1000}
                 nlPer1000={null}
+                refNaam={refNaam}
                 color={COLORS.blue}
               />
             )}
@@ -843,6 +885,7 @@ function UitkeringBox({
   aantal,
   per1000,
   nlPer1000,
+  refNaam,
   color
 }: {
   label: string;
@@ -850,9 +893,11 @@ function UitkeringBox({
   aantal: number | null;
   per1000: number | null;
   nlPer1000: number | null;
+  refNaam: string;
   color: string;
 }) {
   const diff = per1000 !== null && nlPer1000 !== null ? per1000 - nlPer1000 : null;
+  const refLabelKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   return (
     <div style={{
@@ -876,7 +921,7 @@ function UitkeringBox({
           color: diff > 2 ? COLORS.red : diff < -2 ? COLORS.green : '#6b7280',
           margin: '2px 0 0'
         }}>
-          {diff > 0 ? '+' : ''}{diff.toFixed(1)} t.o.v. NL ({nlPer1000})
+          {diff > 0 ? '+' : ''}{diff.toFixed(1)} t.o.v. {refLabelKort} ({nlPer1000?.toFixed(1)})
         </p>
       )}
     </div>
@@ -888,14 +933,17 @@ function KpiBox({
   label,
   value,
   nlWaarde,
-  kpiKey
+  kpiKey,
+  refNaam,
 }: {
   label: string;
   value: number | null;
   nlWaarde: number;
   kpiKey: string;
+  refNaam: string;
 }) {
   const color = getKpiColor(value, nlWaarde, kpiKey);
+  const refLabelKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   return (
     <div style={{
@@ -914,7 +962,7 @@ function KpiBox({
         ) : '-'}
       </p>
       <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>
-        (NL: {nlWaarde.toFixed(1)}%)
+        ({refLabelKort}: {nlWaarde.toFixed(1)}%)
       </p>
     </div>
   );

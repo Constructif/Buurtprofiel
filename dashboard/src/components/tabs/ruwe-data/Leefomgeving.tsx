@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
+import { SelectableCard, SelectableWrapper } from '../../ui/SelectableCard';
 import { fetchLeefomgevingData } from '../../../services/leefomgeving';
 import type { LeefomgevingData, LeefomgevingVergelijkingNiveau } from '../../../types/leefomgeving';
-import { NL_LEEFOMGEVING_REFERENTIES } from '../../../types/leefomgeving';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenLeefomgevingScore } from '../../../utils/scoring';
-import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
 import { logger } from '../../../utils/logger';
 import {
   BarChart,
@@ -37,10 +37,13 @@ function getKpiColor(value: number | null, nlWaarde: number): string {
 const PIE_COLORS = ['#22c55e', '#84cc16', '#34d399', '#10b981', '#059669'];
 
 export function Leefomgeving() {
-  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData, selectedJaar } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData, selectedJaar } = useGebiedStore();
   const [leefomgevingData, setLeefomgevingData] = useState<LeefomgevingData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Actieve benchmarks: schakelt mee met de Nederland/gemeente-toggle.
+  const { set: benchmarksLO, ref, refNaamVoor, benchmarkNaam } = useActiveBenchmarks(null, leefomgevingData);
 
   useEffect(() => {
     if (!selectedGebied || !gebiedData) {
@@ -123,18 +126,26 @@ export function Leefomgeving() {
 
   const { bodemgebruik, metrics, vergelijking, dataJaar, isGemeenteNiveau } = leefomgevingData;
 
+  // Referentiewaarden uit de actieve benchmarks (schakelen mee met de toggle)
+  const refM2Groen = ref('m2GroenPerPersoon');
+  const refGroenPct = ref('groenPercentage');
+  const refNaamM2Groen = refNaamVoor('m2GroenPerPersoon');
+  const refNaamGroenPct = refNaamVoor('groenPercentage');
+
   // Aandachtspunten data samenstellen
   const aandachtspunten = [
     {
       label: 'm² groen per persoon',
       value: metrics.m2GroenPerPersoon,
-      nlWaarde: NL_LEEFOMGEVING_REFERENTIES.m2GroenPerPersoon,
+      nlWaarde: refM2Groen,
+      refNaam: refNaamM2Groen,
       unit: 'm²'
     },
     {
       label: 'Groenpercentage',
       value: metrics.groenPercentage,
-      nlWaarde: NL_LEEFOMGEVING_REFERENTIES.groenPercentage,
+      nlWaarde: refGroenPct,
+      refNaam: refNaamGroenPct,
       unit: '%'
     },
   ];
@@ -147,20 +158,18 @@ export function Leefomgeving() {
     { name: 'Natuurlijk terrein', value: bodemgebruik.natuurlijkTerrein || 0 },
   ].filter(item => item.value > 0);
 
-  // Tab score berekening
-  const benchmarksLO = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
-    ? getGemeenteBenchmarks(gebiedData!, gemeenteData, null, leefomgevingData)
-    : NL_BENCHMARKS;
+  // Tab score berekening met dezelfde actieve benchmarks
   const tabScore = berekenLeefomgevingScore(leefomgevingData, benchmarksLO);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <TabScoreHeader tabScore={tabScore} />
       {/* SECTIE 0: Aandachtspunten */}
-      <AandachtspuntenCard punten={aandachtspunten} />
+      <AandachtspuntenCard punten={aandachtspunten} benchmarkNaam={benchmarkNaam} />
 
       {/* SECTIE 1: Hoofdkader m² groen per persoon */}
-      <Card
+      <SelectableCard
+        sectionId="leefomgeving-groen"
         title="Groenvoorzieningen"
         badge="data"
         badgeText={`CBS Bodemgebruik ${dataJaar}${isGemeenteNiveau ? ' (gemeente)' : ''}`}
@@ -176,7 +185,7 @@ export function Leefomgeving() {
                     <span style={{
                       fontSize: '56px',
                       fontWeight: 700,
-                      color: getKpiColor(metrics.m2GroenPerPersoon, NL_LEEFOMGEVING_REFERENTIES.m2GroenPerPersoon)
+                      color: getKpiColor(metrics.m2GroenPerPersoon, refM2Groen)
                     }}>
                       {metrics.m2GroenPerPersoon}
                     </span>
@@ -195,7 +204,7 @@ export function Leefomgeving() {
                 )}
               </p>
               <p style={{ color: '#9ca3af', fontSize: '12px', marginTop: '4px' }}>
-                (NL gemiddelde: ~{NL_LEEFOMGEVING_REFERENTIES.m2GroenPerPersoon} m²)
+                ({refNaamM2Groen === 'Nederland' ? 'NL' : refNaamM2Groen} gemiddelde: ~{refM2Groen.toFixed(0)} m²)
               </p>
             </div>
 
@@ -204,7 +213,8 @@ export function Leefomgeving() {
               <KpiBox
                 label="Groenpercentage"
                 value={metrics.groenPercentage}
-                nlWaarde={NL_LEEFOMGEVING_REFERENTIES.groenPercentage}
+                nlWaarde={refGroenPct}
+                refNaam={refNaamGroenPct}
                 unit="%"
               />
               <KpiBox
@@ -233,6 +243,7 @@ export function Leefomgeving() {
                   label="Gemeente"
                   data={vergelijking.gemeente}
                   isActive={true}
+                  refM2Groen={refM2Groen}
                 />
               )}
 
@@ -241,16 +252,18 @@ export function Leefomgeving() {
                 label="Nederland"
                 data={vergelijking.nederland}
                 isActive={false}
+                refM2Groen={refM2Groen}
               />
             </div>
           )}
         </div>
-      </Card>
+      </SelectableCard>
 
       {/* SECTIE 2: Bodemgebruik verdeling */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
         {/* Pie chart */}
-        <Card
+        <SelectableCard
+          sectionId="leefomgeving-bodem-verdeling"
           title="Verdeling Groengebieden"
           badge={bodemgebruikData.length > 0 ? 'data' : 'placeholder'}
           badgeText={`CBS ${dataJaar}`}
@@ -287,10 +300,11 @@ export function Leefomgeving() {
               <p>Geen bodemgebruik data beschikbaar</p>
             </div>
           )}
-        </Card>
+        </SelectableCard>
 
         {/* Detail boxes */}
-        <Card
+        <SelectableCard
+          sectionId="leefomgeving-bodem-detail"
           title="Groengebieden per Type"
           badge="data"
           badgeText={`CBS ${dataJaar}`}
@@ -317,18 +331,19 @@ export function Leefomgeving() {
               description="Bos, heide, duinen"
             />
           </div>
-        </Card>
+        </SelectableCard>
       </div>
 
       {/* SECTIE 3: Vergelijking bar chart */}
       {vergelijking && (
-        <Card
+        <SelectableCard
+          sectionId="leefomgeving-vergelijking"
           title="Vergelijking m² Groen per Inwoner"
           badge="data"
           badgeText={`CBS ${dataJaar}`}
         >
           <VergelijkingChart vergelijking={vergelijking} selectedType={selectedGebied?.type} />
-        </Card>
+        </SelectableCard>
       )}
     </div>
   );
@@ -341,10 +356,11 @@ interface Aandachtspunt {
   label: string;
   value: number | null;
   nlWaarde: number;
+  refNaam: string;
   unit: string;
 }
 
-function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
+function AandachtspuntenCard({ punten, benchmarkNaam }: { punten: Aandachtspunt[]; benchmarkNaam: string }) {
   // Filter en sorteer op grootste afwijking
   const sorted = [...punten]
     .filter(p => p.value !== null)
@@ -358,12 +374,13 @@ function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
   if (sorted.length === 0) return null;
 
   return (
-    <Card title="Aandachtspunten" badge="info" badgeText="Vergelijking met NL">
+    <Card title="Aandachtspunten" badge="info" badgeText={`Vergelijking met ${benchmarkNaam}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {sorted.map(punt => {
           // Voor groen is hoger beter, dus negatief diff is een probleem
           const isProbleem = punt.diff < -20;
           const color = getKpiColor(punt.value, punt.nlWaarde);
+          const refKort = punt.refNaam === 'Nederland' ? 'NL' : punt.refNaam;
 
           return (
             <div
@@ -396,7 +413,7 @@ function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
                 minWidth: '100px',
                 textAlign: 'right'
               }}>
-                {punt.diff >= 0 ? '+' : ''}{punt.unit === '%' ? punt.diff.toFixed(1) : Math.round(punt.diff)} t.o.v. NL
+                {punt.diff >= 0 ? '+' : ''}{punt.unit === '%' ? punt.diff.toFixed(1) : Math.round(punt.diff)} t.o.v. {refKort}
               </span>
             </div>
           );
@@ -411,6 +428,7 @@ function KpiBox({
   label,
   value,
   nlWaarde,
+  refNaam = 'Nederland',
   unit,
   showNl = true,
   formatNumber = false
@@ -418,11 +436,13 @@ function KpiBox({
   label: string;
   value: number | null;
   nlWaarde: number | null;
+  refNaam?: string;
   unit: string;
   showNl?: boolean;
   formatNumber?: boolean;
 }) {
   const color = nlWaarde !== null ? getKpiColor(value, nlWaarde) : '#1d1d1b';
+  const refKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   const formatValue = (v: number) => {
     if (formatNumber) {
@@ -449,7 +469,7 @@ function KpiBox({
       </p>
       {showNl && nlWaarde !== null && (
         <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>
-          (NL: {nlWaarde}{unit})
+          ({refKort}: {nlWaarde.toFixed(1)}{unit})
         </p>
       )}
     </div>
@@ -460,14 +480,16 @@ function KpiBox({
 function ComparisonColumn({
   label,
   data,
-  isActive
+  isActive,
+  refM2Groen,
 }: {
   label: string;
   data: LeefomgevingVergelijkingNiveau;
   isActive: boolean;
+  refM2Groen: number;
 }) {
   const color = data.m2PerPersoon !== null
-    ? getKpiColor(data.m2PerPersoon, NL_LEEFOMGEVING_REFERENTIES.m2GroenPerPersoon)
+    ? getKpiColor(data.m2PerPersoon, refM2Groen)
     : '#9ca3af';
 
   return (

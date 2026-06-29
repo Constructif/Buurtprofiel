@@ -8,6 +8,7 @@ import { logger } from '../utils/logger';
 import { fetchGeometry } from '../services/pdok';
 import { calculateBBox } from '../services/geo-utils';
 import { fetchFavorieten, addFavoriet, removeFavoriet } from '../services/favorieten';
+import { loadAllGebieden, loadGebiedData } from '../services/cbs';
 
 interface VoorzieningenCache {
   geometry: GeoJSON.Feature | null;
@@ -29,11 +30,17 @@ interface GebiedStore {
   // Alle gebieden (voor zoeken)
   allGebieden: Gebied[];
   setAllGebieden: (gebieden: Gebied[]) => void;
+  // Zoek volledig Gebied (incl. wijk-/gemeente-hiërarchie) op code.
+  // Laadt allGebieden indien nog leeg (race bij favoriet-klik vóór search-load).
+  resolveGebiedByCode: (code: string) => Promise<Gebied | null>;
 
   // Geselecteerd gebied
   selectedGebied: Gebied | null;
   setSelectedGebied: (gebied: Gebied | null) => void;
   clearSelectedGebied: () => void;
+  // Selecteer een gebied én laad de data; past gebiedData/gemeenteData alleen toe
+  // als het gebied nog steeds geselecteerd is (race-guard bij snel wisselen).
+  selectAndLoadGebied: (gebied: Gebied) => Promise<void>;
 
   // Data van geselecteerd gebied
   gebiedData: GebiedData | null;
@@ -78,8 +85,8 @@ interface GebiedStore {
   setIsLoadingData: (loading: boolean) => void;
 
   // Active tabs
-  mainTab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek';
-  setMainTab: (tab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek') => void;
+  mainTab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek' | 'presentatie';
+  setMainTab: (tab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek' | 'presentatie') => void;
   subTab: string;
   setSubTab: (tab: string) => void;
 
@@ -93,6 +100,16 @@ interface GebiedStore {
   // Nader onderzoek
   actiefTopicId: string | null;
   setActiefTopicId: (id: string | null) => void;
+
+  // Presentatie selecties (per gebiedCode → geordende array van sectionIds)
+  presentatieSelecties: Map<string, string[]>;
+  isSelectieModus: boolean;
+  setSelectieModus: (active: boolean) => void;
+  togglePresentatieSelectie: (gebiedCode: string, sectionId: string) => void;
+  isPresentatieGeselecteerd: (gebiedCode: string, sectionId: string) => boolean;
+  getPresentatieSelecties: (gebiedCode: string) => string[];
+  clearPresentatieSelecties: (gebiedCode: string) => void;
+  movePresentatieSelectie: (gebiedCode: string, sectionId: string, direction: 'up' | 'down') => void;
 
   // Profiel-weergave (los van de gebied-tabs)
   profielOpen: boolean;
@@ -126,6 +143,19 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
   allGebieden: [],
   setAllGebieden: (gebieden) => set({ allGebieden: gebieden }),
 
+  resolveGebiedByCode: async (code) => {
+    const direct = get().allGebieden.find((g) => g.code === code);
+    if (direct) return direct;
+    try {
+      const gebieden = await loadAllGebieden(); // dedupt op key 'gebieden-all'
+      if (get().allGebieden.length === 0) set({ allGebieden: gebieden });
+      return gebieden.find((g) => g.code === code) ?? null;
+    } catch (error) {
+      logger.error('Kan gebied niet resolven op code:', error);
+      return null;
+    }
+  },
+
   selectedGebied: loadFromStorage('bp_selectedGebied'),
   setSelectedGebied: (gebied) => {
     saveToStorage('bp_selectedGebied', gebied);
@@ -140,6 +170,31 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
       dataCache: new Map(),
       gemeenteDataCache: new Map(),
     });
+  },
+  selectAndLoadGebied: async (gebied) => {
+    // Selecteer direct zodat de UI meteen reageert.
+    get().setSelectedGebied(gebied);
+    set({ isLoadingData: true });
+    try {
+      const { gebiedData, gemeenteData } = await loadGebiedData(gebied, get().selectedJaar);
+      // Race-guard: alleen toepassen als ditzelfde gebied nog geselecteerd is.
+      // Bij snel wisselen keert een trage fetch van een vorig gebied later terug;
+      // die mag de data van het huidige gebied niet overschrijven.
+      if (get().selectedGebied?.code !== gebied.code) return;
+      set({ gebiedData, gemeenteData });
+      // Voorzieningen/geometrie vast prefetchen (fire-and-forget, cache op gebiedscode).
+      get().prefetchVoorzieningen(gebied.code);
+    } catch (error) {
+      if (get().selectedGebied?.code === gebied.code) {
+        logger.error('Fout bij laden gebied data:', error);
+      }
+    } finally {
+      // Alleen de laadstatus resetten als we nog op dit gebied zitten,
+      // anders zet een late fetch de spinner uit terwijl het nieuwe gebied nog laadt.
+      if (get().selectedGebied?.code === gebied.code) {
+        set({ isLoadingData: false });
+      }
+    }
   },
 
   gebiedData: null,
@@ -324,12 +379,13 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
   isLoadingData: false,
   setIsLoadingData: (loading) => set({ isLoadingData: loading }),
 
-  mainTab: (loadFromStorage<string>('bp_mainTab') as 'ruwe-data' | 'wijkronde' | 'nader-onderzoek') || 'ruwe-data',
+  mainTab: (loadFromStorage<string>('bp_mainTab') as 'ruwe-data' | 'wijkronde' | 'nader-onderzoek' | 'presentatie') || 'ruwe-data',
   setMainTab: (tab) => {
     const defaultSubTabs: Record<string, string> = {
       'ruwe-data': 'overzicht',
       'wijkronde': 'observaties',
       'nader-onderzoek': '',
+      'presentatie': '',
     };
     const newSubTab = defaultSubTabs[tab] || '';
     saveToStorage('bp_mainTab', tab);
@@ -353,6 +409,51 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
 
   actiefTopicId: null,
   setActiefTopicId: (id) => set({ actiefTopicId: id }),
+
+  presentatieSelecties: new Map(
+    Object.entries(
+      loadFromStorage<Record<string, string[]>>('bp_presentatie_all') ?? {}
+    )
+  ),
+  isSelectieModus: false,
+  setSelectieModus: (active) => set({ isSelectieModus: active }),
+  togglePresentatieSelectie: (gebiedCode, sectionId) => {
+    const current = new Map(get().presentatieSelecties);
+    const sectiesVoorGebied = current.get(gebiedCode) ?? [];
+    const idx = sectiesVoorGebied.indexOf(sectionId);
+    const nieuw = idx === -1
+      ? [...sectiesVoorGebied, sectionId]
+      : sectiesVoorGebied.filter((id) => id !== sectionId);
+    if (nieuw.length === 0) {
+      current.delete(gebiedCode);
+    } else {
+      current.set(gebiedCode, nieuw);
+    }
+    saveToStorage('bp_presentatie_all', Object.fromEntries(current));
+    set({ presentatieSelecties: current });
+  },
+  isPresentatieGeselecteerd: (gebiedCode, sectionId) =>
+    (get().presentatieSelecties.get(gebiedCode) ?? []).includes(sectionId),
+  getPresentatieSelecties: (gebiedCode) =>
+    get().presentatieSelecties.get(gebiedCode) ?? [],
+  clearPresentatieSelecties: (gebiedCode) => {
+    const current = new Map(get().presentatieSelecties);
+    current.delete(gebiedCode);
+    saveToStorage('bp_presentatie_all', Object.fromEntries(current));
+    set({ presentatieSelecties: current });
+  },
+  movePresentatieSelectie: (gebiedCode, sectionId, direction) => {
+    const current = new Map(get().presentatieSelecties);
+    const sectiesVoorGebied = [...(current.get(gebiedCode) ?? [])];
+    const idx = sectiesVoorGebied.indexOf(sectionId);
+    if (idx === -1) return;
+    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+    if (newIdx < 0 || newIdx >= sectiesVoorGebied.length) return;
+    [sectiesVoorGebied[idx], sectiesVoorGebied[newIdx]] = [sectiesVoorGebied[newIdx], sectiesVoorGebied[idx]];
+    current.set(gebiedCode, sectiesVoorGebied);
+    saveToStorage('bp_presentatie_all', Object.fromEntries(current));
+    set({ presentatieSelecties: current });
+  },
 
   profielOpen: false,
   setProfielOpen: (open) => set({ profielOpen: open }),

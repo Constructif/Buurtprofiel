@@ -18,23 +18,36 @@ export const NL_BENCHMARKS: BenchmarkSet = {
   gewogenMisdrijvenPer1000: { gemiddelde: 60, stdDev: 30 },
   // Voorzieningen
   voorzieningenPer1000: { gemiddelde: 8, stdDev: 4 },
-  // Zorg & Welzijn (bron: RIVM GGD Gezondheidsmonitor 2022)
+  // Zorg & Welzijn (bron: RIVM GGD Gezondheidsmonitor 2022, dataset 50120NED, NL01, 18+)
   eenzaamheid: { gemiddelde: 49.2, stdDev: 12 },
   ernstigeEenzaamheid: { gemiddelde: 14.4, stdDev: 5 },
+  emotioneelEenzaam: { gemiddelde: 30.1, stdDev: 10 },
+  sociaalEenzaam: { gemiddelde: 35.3, stdDev: 10 },
   angstDepressie: { gemiddelde: 10.2, stdDev: 4 },
+  psychischeKlachten: { gemiddelde: 22.2, stdDev: 8 },
+  stress: { gemiddelde: 20.7, stdDev: 8 },
+  emotioneleSteun: { gemiddelde: 6.4, stdDev: 4 },
+  veerkracht: { gemiddelde: 17.3, stdDev: 6 },
+  mantelzorger: { gemiddelde: 13.5, stdDev: 5 },
+  langdurigeAandoeningen: { gemiddelde: 33.4, stdDev: 10 },
+  beperkt: { gemiddelde: 33.8, stdDev: 10 },
   ervarenGezondheid: { gemiddelde: 69, stdDev: 10 },
   moeiteRondkomen: { gemiddelde: 20.5, stdDev: 8 },
   vrijwilligerswerk: { gemiddelde: 23.8, stdDev: 8 },
   wmoPer1000: { gemiddelde: 60, stdDev: 25 },
-  // Werk & Inkomen (bron: CBS Kerncijfers)
+  // Werk & Inkomen (bron: CBS Kerncijfers 85984NED + 86052NED + 85618NED)
   gemiddeldInkomen: { gemiddelde: 37200, stdDev: 8000 },
   // CBS quintiel-definities: laagInkomen = % personen in landelijke onderste 40%, hoogInkomen = bovenste 20%
   // Landelijk gemiddelde is per definitie ~40% resp. ~20% (het is een quintiel-verdeling)
   laagInkomen: { gemiddelde: 40, stdDev: 8 },   // stdDev 8: striktere differentiatie tussen buurten
   hoogInkomen: { gemiddelde: 20, stdDev: 8 },
   arbeidsparticipatie: { gemiddelde: 71, stdDev: 8 },
+  opleidingLaag: { gemiddelde: 26.3, stdDev: 10 },
+  opleidingMidden: { gemiddelde: 41.2, stdDev: 10 },
   opleidingHoog: { gemiddelde: 32.5, stdDev: 10 },
   bijstandPer1000: { gemiddelde: 23, stdDev: 12 },
+  wwPer1000: { gemiddelde: 9, stdDev: 6 },
+  aoPer1000: { gemiddelde: 44, stdDev: 18 },
   // Leefomgeving (bron: CBS 86211NED bodemgebruik + bevolking)
   m2GroenPerPersoon: { gemiddelde: 418, stdDev: 0.5 }, // log-schaal: stdDev in log10 eenheden
   groenPercentage: { gemiddelde: 18.1, stdDev: 10 },
@@ -52,26 +65,34 @@ export function getGemeenteBenchmarks(
   zorgData: ZorgWelzijnData | null,
   leefomgevingData: LeefomgevingData | null,
 ): BenchmarkSet {
-  // Start met NL als basis (fallback)
+  // Start met NL als basis: élke metric is in beginsel een NL-fallback.
+  // markeer alle metrics expliciet als fallback; setGemeente() haalt dat weg
+  // zodra er een echt gemeentecijfer wordt ingevuld.
   const benchmarks: BenchmarkSet = { ...NL_BENCHMARKS, type: 'gemeente', naam: gebiedData.gemeenteNaam || 'Gemeente' };
+  for (const key of Object.keys(benchmarks) as (keyof BenchmarkSet)[]) {
+    const metric = benchmarks[key];
+    if (typeof metric === 'object' && metric !== null && 'gemiddelde' in metric) {
+      benchmarks[key] = { ...metric, isFallback: true } as never;
+    }
+  }
+
+  // Zet een echt gemeentecijfer; behoud NL-stdDev (we laden niet alle buurten van de gemeente).
+  const setGemeente = (key: keyof BenchmarkSet, waarde: number | null | undefined) => {
+    if (waarde === null || waarde === undefined) return;
+    const nlMetric = NL_BENCHMARKS[key];
+    if (typeof nlMetric !== 'object') return;
+    benchmarks[key] = { gemiddelde: waarde, stdDev: nlMetric.stdDev, isFallback: false } as never;
+  };
 
   if (!gemeenteData) return benchmarks;
 
   // Bewoners - dichtheid
-  if (gemeenteData.bevolking.dichtheid > 0) {
-    benchmarks.dichtheid = { gemiddelde: gemeenteData.bevolking.dichtheid, stdDev: NL_BENCHMARKS.dichtheid.stdDev };
-  }
+  if (gemeenteData.bevolking.dichtheid > 0) setGemeente('dichtheid', gemeenteData.bevolking.dichtheid);
 
   // Wonen
-  if (gemeenteData.woningen.koopPercentage > 0) {
-    benchmarks.koopPercentage = { gemiddelde: gemeenteData.woningen.koopPercentage, stdDev: NL_BENCHMARKS.koopPercentage.stdDev };
-  }
-  if (gemeenteData.woningen.huurParticulierPercentage > 0) {
-    benchmarks.huurParticulier = { gemiddelde: gemeenteData.woningen.huurParticulierPercentage, stdDev: NL_BENCHMARKS.huurParticulier.stdDev };
-  }
-  if (gemeenteData.woningen.huurSociaalPercentage > 0) {
-    benchmarks.huurSociaal = { gemiddelde: gemeenteData.woningen.huurSociaalPercentage, stdDev: NL_BENCHMARKS.huurSociaal.stdDev };
-  }
+  if (gemeenteData.woningen.koopPercentage > 0) setGemeente('koopPercentage', gemeenteData.woningen.koopPercentage);
+  if (gemeenteData.woningen.huurParticulierPercentage > 0) setGemeente('huurParticulier', gemeenteData.woningen.huurParticulierPercentage);
+  if (gemeenteData.woningen.huurSociaalPercentage > 0) setGemeente('huurSociaal', gemeenteData.woningen.huurSociaalPercentage);
 
   // Veiligheid - bereken gewogen misdrijven per 1000 voor gemeente
   if (gemeenteData.bevolking.totaal > 0 && gemeenteData.criminaliteit.totaal > 0) {
@@ -79,66 +100,46 @@ export function getGemeenteBenchmarks(
     const veelvoorkomend = gemeenteData.criminaliteit.vermogen - gemeenteData.criminaliteit.inbraakWoningen + gemeenteData.criminaliteit.vernieling;
     const gewogenTotaal = (highImpact * 2.5) + veelvoorkomend;
     const gewogenPer1000 = (gewogenTotaal / gemeenteData.bevolking.totaal) * 1000;
-    benchmarks.gewogenMisdrijvenPer1000 = { gemiddelde: gewogenPer1000, stdDev: NL_BENCHMARKS.gewogenMisdrijvenPer1000.stdDev };
+    setGemeente('gewogenMisdrijvenPer1000', gewogenPer1000);
   }
 
   // Werk & Inkomen
-  if (gemeenteData.inkomen.gemiddeld !== null) {
-    benchmarks.gemiddeldInkomen = { gemiddelde: gemeenteData.inkomen.gemiddeld, stdDev: NL_BENCHMARKS.gemiddeldInkomen.stdDev };
-  }
+  setGemeente('gemiddeldInkomen', gemeenteData.inkomen.gemiddeld);
   if (gemeenteData.inkomen.laagInkomenPercentage !== null && gemeenteData.inkomen.laagInkomenPercentage > 0) {
-    benchmarks.laagInkomen = { gemiddelde: gemeenteData.inkomen.laagInkomenPercentage, stdDev: NL_BENCHMARKS.laagInkomen.stdDev };
+    setGemeente('laagInkomen', gemeenteData.inkomen.laagInkomenPercentage);
   }
   if (gemeenteData.inkomen.hoogInkomenPercentage !== null && gemeenteData.inkomen.hoogInkomenPercentage > 0) {
-    benchmarks.hoogInkomen = { gemiddelde: gemeenteData.inkomen.hoogInkomenPercentage, stdDev: NL_BENCHMARKS.hoogInkomen.stdDev };
+    setGemeente('hoogInkomen', gemeenteData.inkomen.hoogInkomenPercentage);
   }
-  if (gemeenteData.werkInkomen?.werkgelegenheid.arbeidsparticipatie !== null && gemeenteData.werkInkomen?.werkgelegenheid.arbeidsparticipatie !== undefined) {
-    benchmarks.arbeidsparticipatie = { gemiddelde: gemeenteData.werkInkomen.werkgelegenheid.arbeidsparticipatie, stdDev: NL_BENCHMARKS.arbeidsparticipatie.stdDev };
-  }
-  if (gemeenteData.werkInkomen?.opleiding.hoog !== null && gemeenteData.werkInkomen?.opleiding.hoog !== undefined) {
-    benchmarks.opleidingHoog = { gemiddelde: gemeenteData.werkInkomen.opleiding.hoog, stdDev: NL_BENCHMARKS.opleidingHoog.stdDev };
-  }
-  if (gemeenteData.werkInkomen?.uitkeringen.bijstandPer1000 !== null && gemeenteData.werkInkomen?.uitkeringen.bijstandPer1000 !== undefined) {
-    benchmarks.bijstandPer1000 = { gemiddelde: gemeenteData.werkInkomen.uitkeringen.bijstandPer1000, stdDev: NL_BENCHMARKS.bijstandPer1000.stdDev };
-  }
+  setGemeente('arbeidsparticipatie', gemeenteData.werkInkomen?.werkgelegenheid.arbeidsparticipatie);
+  setGemeente('opleidingLaag', gemeenteData.werkInkomen?.opleiding.laag);
+  setGemeente('opleidingMidden', gemeenteData.werkInkomen?.opleiding.midden);
+  setGemeente('opleidingHoog', gemeenteData.werkInkomen?.opleiding.hoog);
+  setGemeente('bijstandPer1000', gemeenteData.werkInkomen?.uitkeringen.bijstandPer1000);
+  setGemeente('wwPer1000', gemeenteData.werkInkomen?.uitkeringen.wwPer1000);
+  setGemeente('aoPer1000', gemeenteData.werkInkomen?.uitkeringen.aoPer1000);
 
-  // Zorg & Welzijn - gemeente level uit vergelijking
+  // Zorg & Welzijn - gemeente level uit vergelijking.
+  // ZorgVergelijkingNiveau draagt momenteel alleen deze 6 velden; de overige
+  // zorg-metrics (psychischeKlachten, stress, etc.) blijven NL-fallback.
   if (zorgData?.vergelijking.gemeente) {
     const gem = zorgData.vergelijking.gemeente;
-    if (gem.eenzaam !== null) {
-      benchmarks.eenzaamheid = { gemiddelde: gem.eenzaam, stdDev: NL_BENCHMARKS.eenzaamheid.stdDev };
-    }
-    if (gem.ernstigEenzaam !== null) {
-      benchmarks.ernstigeEenzaamheid = { gemiddelde: gem.ernstigEenzaam, stdDev: NL_BENCHMARKS.ernstigeEenzaamheid.stdDev };
-    }
-    if (gem.angstDepressie !== null) {
-      benchmarks.angstDepressie = { gemiddelde: gem.angstDepressie, stdDev: NL_BENCHMARKS.angstDepressie.stdDev };
-    }
-    if (gem.ervarenGezondheid !== null) {
-      benchmarks.ervarenGezondheid = { gemiddelde: gem.ervarenGezondheid, stdDev: NL_BENCHMARKS.ervarenGezondheid.stdDev };
-    }
-    if (gem.moeiteRondkomen !== null) {
-      benchmarks.moeiteRondkomen = { gemiddelde: gem.moeiteRondkomen, stdDev: NL_BENCHMARKS.moeiteRondkomen.stdDev };
-    }
-    if (gem.vrijwilligerswerk !== null) {
-      benchmarks.vrijwilligerswerk = { gemiddelde: gem.vrijwilligerswerk, stdDev: NL_BENCHMARKS.vrijwilligerswerk.stdDev };
-    }
+    setGemeente('eenzaamheid', gem.eenzaam);
+    setGemeente('ernstigeEenzaamheid', gem.ernstigEenzaam);
+    setGemeente('angstDepressie', gem.angstDepressie);
+    setGemeente('ervarenGezondheid', gem.ervarenGezondheid);
+    setGemeente('moeiteRondkomen', gem.moeiteRondkomen);
+    setGemeente('vrijwilligerswerk', gem.vrijwilligerswerk);
   }
 
   // Jeugdzorg/WMO
-  if (gemeenteData.jeugdzorgWmo?.wmoPer1000 !== null && gemeenteData.jeugdzorgWmo?.wmoPer1000 !== undefined) {
-    benchmarks.wmoPer1000 = { gemiddelde: gemeenteData.jeugdzorgWmo.wmoPer1000, stdDev: NL_BENCHMARKS.wmoPer1000.stdDev };
-  }
+  setGemeente('wmoPer1000', gemeenteData.jeugdzorgWmo?.wmoPer1000);
 
   // Leefomgeving - gemeente level uit vergelijking
   if (leefomgevingData?.vergelijking.gemeente) {
     const gem = leefomgevingData.vergelijking.gemeente;
-    if (gem.m2PerPersoon !== null) {
-      benchmarks.m2GroenPerPersoon = { gemiddelde: gem.m2PerPersoon, stdDev: NL_BENCHMARKS.m2GroenPerPersoon.stdDev };
-    }
-    if (gem.groenPercentage !== null) {
-      benchmarks.groenPercentage = { gemiddelde: gem.groenPercentage, stdDev: NL_BENCHMARKS.groenPercentage.stdDev };
-    }
+    setGemeente('m2GroenPerPersoon', gem.m2PerPersoon);
+    setGemeente('groenPercentage', gem.groenPercentage);
   }
 
   return benchmarks;

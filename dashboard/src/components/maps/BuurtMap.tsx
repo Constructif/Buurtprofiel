@@ -55,20 +55,29 @@ export function BuurtMap() {
       return;
     }
 
+    // Guard tegen race conditions: bij snel wisselen van gebied mag een trage
+    // fetch van het vorige gebied de geometrie van het huidige niet overschrijven.
+    let isCancelled = false;
+    const code = selectedGebied.code;
+
     async function loadGeometry() {
-      if (!selectedGebied) return;
       setLoading(true);
       try {
-        const geo = await fetchGeometry(selectedGebied.code);
+        const geo = await fetchGeometry(code);
+        if (isCancelled) return;
         setGeometry(geo);
       } catch (error) {
-        logger.error('Fout bij laden geometrie:', error);
+        if (!isCancelled) logger.error('Fout bij laden geometrie:', error);
       } finally {
-        setLoading(false);
+        if (!isCancelled) setLoading(false);
       }
     }
 
     loadGeometry();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [selectedGebied]);
 
   return (

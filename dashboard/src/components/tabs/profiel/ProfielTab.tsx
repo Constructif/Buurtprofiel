@@ -1,8 +1,6 @@
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { useAuthStore } from '../../../store/authStore';
 import { supabase } from '../../../services/supabase';
-import { loadGebiedData } from '../../../services/cbs';
-import { logger } from '../../../utils/logger';
 import type { Favoriet } from '../../../types/favorieten';
 import type { Gebied } from '../../../types/gebied';
 
@@ -19,23 +17,16 @@ export function ProfielTab() {
   const user = useAuthStore((s) => s.user);
   const favorieten = useGebiedStore((s) => s.favorieten);
   const toggleFavoriet = useGebiedStore((s) => s.toggleFavoriet);
-  const setSelectedGebied = useGebiedStore((s) => s.setSelectedGebied);
   const setProfielOpen = useGebiedStore((s) => s.setProfielOpen);
-  const setGebiedData = useGebiedStore((s) => s.setGebiedData);
-  const setGemeenteData = useGebiedStore((s) => s.setGemeenteData);
-  const selectedJaar = useGebiedStore((s) => s.selectedJaar);
+  const selectAndLoadGebied = useGebiedStore((s) => s.selectAndLoadGebied);
+  const resolveGebiedByCode = useGebiedStore((s) => s.resolveGebiedByCode);
 
   const openFavoriet = async (f: Favoriet) => {
-    const gebied = favorietNaarGebied(f);
-    setSelectedGebied(gebied);
     setProfielOpen(false);
-    try {
-      const { gebiedData, gemeenteData } = await loadGebiedData(gebied, selectedJaar);
-      setGebiedData(gebiedData);
-      setGemeenteData(gemeenteData);
-    } catch (error) {
-      logger.error('Fout bij laden favoriet gebied:', error);
-    }
+    const resolved = await resolveGebiedByCode(f.gebied_code);
+    const gebied = resolved ?? favorietNaarGebied(f); // fallback bij inactief/verwijderd gebied
+    // selectAndLoadGebied bewaakt zelf tegen race conditions bij snel wisselen.
+    await selectAndLoadGebied(gebied);
   };
 
   return (

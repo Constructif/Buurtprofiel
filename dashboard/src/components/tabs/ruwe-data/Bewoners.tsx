@@ -1,11 +1,11 @@
 import { useState, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { Card } from '../../ui/Card';
+import { SelectableCard } from '../../ui/SelectableCard';
 import { CardTrendChart } from '../../ui/CardTrendChart';
 import { InfoGrid } from '../../ui/InfoGrid';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenBewonersScore } from '../../../utils/scoring';
-import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
 import { fetchKerncijfersForYear, fetchKerncijfersAllYears, fetchHerkomstLandForYear, fetchHerkomstLandAllYears } from '../../../services/cbs';
 import { useCardYear } from '../../../hooks/useCardYear';
 import type { HerkomstLandData } from '../../../types/gebied';
@@ -44,7 +44,8 @@ function getHerkomstLandKleur(land: string): string {
 }
 
 export function Bewoners() {
-  const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
+  const { gebiedData, selectedGebied, isLoadingData } = useGebiedStore();
+  const { set: benchmarks } = useActiveBenchmarks();
   const [showDichtheidInfo, setShowDichtheidInfo] = useState(false);
 
   // Alle hooks MOETEN boven early returns staan (React hooks regels)
@@ -137,10 +138,7 @@ export function Bewoners() {
     : demo.bev.dichtheid > 1000 ? 'Matig dicht'
     : 'Dunbevolkt';
 
-  // Score berekening
-  const benchmarks = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
-    ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
-    : NL_BENCHMARKS;
+  // Score berekening met de actieve benchmarks (schakelt mee met de toggle)
   const tabScore = berekenBewonersScore(gebiedData, benchmarks);
 
   const { herkomstLandGemeente, gemeenteNaam } = gebiedData;
@@ -150,7 +148,7 @@ export function Bewoners() {
       <TabScoreHeader tabScore={tabScore} />
 
       {/* Demografische gegevens */}
-      <Card title="Demografische Gegevens" badge="data" year={demo.jaar}
+      <SelectableCard sectionId="bewoners-demografisch" title="Demografische Gegevens" badge="data" year={demo.jaar}
         onYearChange={demografischCard.handleYearChange} availableYears={demografischCard.availableYears}
         activeYearMode={demografischCard.activeMode} yearsWithData={demografischCard.yearsWithData}>
         {demografischCard.isLoading ? (
@@ -190,12 +188,12 @@ export function Bewoners() {
             </div>
           </>
         )}
-      </Card>
+      </SelectableCard>
 
       {/* Charts grid */}
       <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Leeftijdsverdeling */}
-        <Card title="Leeftijdsverdeling" badge="data" year={leeft.jaar}
+        <SelectableCard sectionId="bewoners-leeftijd" title="Leeftijdsverdeling" badge="data" year={leeft.jaar}
           onYearChange={leeftijdCard.handleYearChange} availableYears={leeftijdCard.availableYears}
           activeYearMode={leeftijdCard.activeMode} yearsWithData={leeftijdCard.yearsWithData}>
           {leeftijdCard.isLoading ? (
@@ -220,10 +218,10 @@ export function Bewoners() {
               </ResponsiveContainer>
             </div>
           )}
-        </Card>
+        </SelectableCard>
 
         {/* Herkomst */}
-        <Card title="Herkomst Bevolking" badge="data" year={herk.jaar}
+        <SelectableCard sectionId="bewoners-herkomst" title="Herkomst Bevolking" badge="data" year={herk.jaar}
           onYearChange={herkomstCard.handleYearChange} availableYears={herkomstCard.availableYears}
           activeYearMode={herkomstCard.activeMode} yearsWithData={herkomstCard.yearsWithData}>
           {herkomstCard.isLoading ? (
@@ -255,7 +253,7 @@ export function Bewoners() {
               </div>
             </>
           )}
-        </Card>
+        </SelectableCard>
       </div>
 
       {/* Herkomst per Land - Gemeente niveau */}
@@ -263,7 +261,8 @@ export function Bewoners() {
         const hlData = herkomstLandCard.overrideData ?? herkomstLandGemeente;
         const hlJaar = herkomstLandCard.overrideData?.dataJaar ?? herkomstLandGemeente?.dataJaar;
         return (
-      <Card
+      <SelectableCard
+        sectionId="bewoners-herkomstland"
         title={`Herkomst per Land${gemeenteNaam && selectedGebied?.type !== 'gemeente' ? ` - Gemeente ${gemeenteNaam}` : ''}`}
         badge={hlData && hlData.landen.length > 0 ? "data" : "placeholder"}
         year={hlJaar}
@@ -367,12 +366,12 @@ export function Bewoners() {
             <p style={{ fontSize: '12px' }}>CBS biedt alleen gedetailleerde herkomstdata voor de grote gemeenten (Amsterdam, Rotterdam, Den Haag, Utrecht, Groningen, Almere, Eindhoven, Tilburg)</p>
           </div>
         )}
-      </Card>
+      </SelectableCard>
         );
       })()}
 
       {/* Huishoudenstypen */}
-      <Card title="Huishoudenstypen" badge="data" year={huish.jaar}
+      <SelectableCard sectionId="bewoners-huishoudens" title="Huishoudenstypen" badge="data" year={huish.jaar}
         onYearChange={huishoudensCard.handleYearChange} availableYears={huishoudensCard.availableYears}
         activeYearMode={huishoudensCard.activeMode} yearsWithData={huishoudensCard.yearsWithData}>
         {huishoudensCard.isLoading ? (
@@ -412,7 +411,7 @@ export function Bewoners() {
             </p>
           </>
         )}
-      </Card>
+      </SelectableCard>
     </div>
   );
 }

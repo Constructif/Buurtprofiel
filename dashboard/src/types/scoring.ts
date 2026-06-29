@@ -54,6 +54,9 @@ export interface BuurtprofielScore {
 export interface MetriekBenchmark {
   gemiddelde: number;
   stdDev: number;
+  // true = gemeentecijfer ontbrak, NL-waarde gebruikt als fallback.
+  // Relevant in 'gemeente'-modus: de UI kan dit per metric tonen ("NL: x" i.p.v. "[gemeente]: x").
+  isFallback?: boolean;
 }
 
 // Alle benchmarks voor een volledige scoreberekening
@@ -73,7 +76,16 @@ export interface BenchmarkSet {
   // Zorg & Welzijn
   eenzaamheid: MetriekBenchmark;
   ernstigeEenzaamheid: MetriekBenchmark;
+  emotioneelEenzaam: MetriekBenchmark;
+  sociaalEenzaam: MetriekBenchmark;
   angstDepressie: MetriekBenchmark;
+  psychischeKlachten: MetriekBenchmark;
+  stress: MetriekBenchmark;
+  emotioneleSteun: MetriekBenchmark;
+  veerkracht: MetriekBenchmark;
+  mantelzorger: MetriekBenchmark;
+  langdurigeAandoeningen: MetriekBenchmark;
+  beperkt: MetriekBenchmark;
   ervarenGezondheid: MetriekBenchmark;
   moeiteRondkomen: MetriekBenchmark;
   vrijwilligerswerk: MetriekBenchmark;
@@ -83,8 +95,12 @@ export interface BenchmarkSet {
   laagInkomen: MetriekBenchmark;
   hoogInkomen: MetriekBenchmark;
   arbeidsparticipatie: MetriekBenchmark;
+  opleidingLaag: MetriekBenchmark;
+  opleidingMidden: MetriekBenchmark;
   opleidingHoog: MetriekBenchmark;
   bijstandPer1000: MetriekBenchmark;
+  wwPer1000: MetriekBenchmark;
+  aoPer1000: MetriekBenchmark;
   // Leefomgeving
   m2GroenPerPersoon: MetriekBenchmark;
   groenPercentage: MetriekBenchmark;

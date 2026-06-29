@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
+import { SelectableCard } from '../../ui/SelectableCard';
 import { fetchZorgWelzijnData } from '../../../services/rivm';
 import type { ZorgWelzijnData } from '../../../types/zorgWelzijn';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenZorgWelzijnScore } from '../../../utils/scoring';
-import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
+import type { MetriekKey } from '../../../hooks/useActiveBenchmarks';
 import { logger } from '../../../utils/logger';
 import {
   LineChart,
@@ -18,24 +20,25 @@ import {
   Legend
 } from 'recharts';
 
-// NL Referentiewaarden (RIVM Gezondheidsmonitor 2022, dataset 50120NED, NL01, 18+)
-// Bron: dataderden.cbs.nl/ODataApi/OData/50120NED, Leeftijd=20300, Marges=MW00000
-const NL_REFERENTIES = {
-  eenzaam: 49.2,              // Eenzaam_27
-  ernstigEenzaam: 14.4,       // ErnstigZeerErnstigEenzaam_28
-  emotioneelEenzaam: 30.1,    // EmotioneelEenzaam_29
-  sociaalEenzaam: 35.3,       // SociaalEenzaam_30
-  psychischeKlachten: 22.2,   // PsychischeKlachten_20
-  angstDepressie: 10.2,       // HoogRisicoOpAngstOfDepressie_25
-  stress: 20.7,               // HeelVeelStressInAfgelopen4Weken_26
-  emotioneleSteun: 6.4,       // MistEmotioneleSteun_23
-  veerkracht: 17.3,           // ZeerLageVeerkracht_21
-  mantelzorger: 13.5,         // Mantelzorger_31
-  vrijwilligerswerk: 23.8,    // Vrijwilligerswerk_32
-  ervarenGezondheid: 69.0,    // ErvarenGezondheidGoedZeerGoed_4
-  langdurigeAandoeningen: 33.4, // EenOfMeerLangdurigeAandoeningen_16
-  beperkt: 33.8,              // BeperktVanwegeGezondheid_17
-  moeiteRondkomen: 20.5,      // MoeiteMetRondkomen_33
+// Mapping van de UI-metric-keys naar de bijbehorende BenchmarkSet-keys.
+// De referentiewaarden komen nu uit de actieve benchmarks (Nederland of gemeente)
+// via useActiveBenchmarks, i.p.v. uit een hardcoded NL-constante.
+const ZORG_BENCHMARK_KEY: Record<string, MetriekKey> = {
+  eenzaam: 'eenzaamheid',
+  ernstigEenzaam: 'ernstigeEenzaamheid',
+  emotioneelEenzaam: 'emotioneelEenzaam',
+  sociaalEenzaam: 'sociaalEenzaam',
+  psychischeKlachten: 'psychischeKlachten',
+  angstDepressie: 'angstDepressie',
+  stress: 'stress',
+  emotioneleSteun: 'emotioneleSteun',
+  veerkracht: 'veerkracht',
+  mantelzorger: 'mantelzorger',
+  vrijwilligerswerk: 'vrijwilligerswerk',
+  ervarenGezondheid: 'ervarenGezondheid',
+  langdurigeAandoeningen: 'langdurigeAandoeningen',
+  beperkt: 'beperkt',
+  moeiteRondkomen: 'moeiteRondkomen',
 };
 
 // Indicatoren waar hoger = beter
@@ -83,17 +86,23 @@ function getKpiColor(value: number | null, nlWaarde: number, key: string): strin
   return '#ef4444';                          // Rood - veel slechter
 }
 
-// Kleuren voor eenzaamheid vergelijking
-const getEenzaamheidColor = (percentage: number | null): string => {
+// Kleuren voor eenzaamheid vergelijking (referentiewaarde wordt meegegeven)
+const getEenzaamheidColor = (percentage: number | null, refEenzaam: number): string => {
   if (percentage === null) return '#9ca3af';
-  return getKpiColor(percentage, NL_REFERENTIES.eenzaam, 'eenzaam');
+  return getKpiColor(percentage, refEenzaam, 'eenzaam');
 };
 
 export function ZorgWelzijn() {
-  const { selectedGebied, isLoadingData, gebiedData, benchmarkType, gemeenteData, selectedJaar } = useGebiedStore();
+  const { selectedGebied, isLoadingData, gebiedData, selectedJaar } = useGebiedStore();
   const [zorgData, setZorgData] = useState<ZorgWelzijnData | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Actieve benchmarks: schakelt mee met de Nederland/gemeente-toggle.
+  // zorgData levert de gemeente-cijfers voor de zorg-metrics waar die beschikbaar zijn.
+  const { set: benchmarksZW, ref, refNaamVoor, benchmarkNaam } = useActiveBenchmarks(zorgData);
+  const refZorg = (uiKey: string): number => ref(ZORG_BENCHMARK_KEY[uiKey]);
+  const refNaamZorg = (uiKey: string): string => refNaamVoor(ZORG_BENCHMARK_KEY[uiKey]);
 
   useEffect(() => {
     if (!selectedGebied) {
@@ -175,30 +184,28 @@ export function ZorgWelzijn() {
   const { eenzaamheid, mentaleGezondheid, zorgOndersteuning, trend, vergelijking, dataJaar } = zorgData;
   const badgeConfig = getBadgeConfig(dataJaar);
 
-  // Aandachtspunten data samenstellen
+  // Aandachtspunten data samenstellen (referentiewaarden schakelen mee met de toggle)
   const aandachtspunten = [
-    { label: 'Eenzaamheid', value: eenzaamheid.totaal, nlWaarde: NL_REFERENTIES.eenzaam, key: 'eenzaam' },
-    { label: 'Ernstig eenzaam', value: eenzaamheid.ernstig, nlWaarde: NL_REFERENTIES.ernstigEenzaam, key: 'ernstigEenzaam' },
-    { label: 'Psychische klachten', value: mentaleGezondheid.psychischeKlachten, nlWaarde: NL_REFERENTIES.psychischeKlachten, key: 'psychischeKlachten' },
-    { label: 'Angst/depressie risico', value: mentaleGezondheid.angstDepressie, nlWaarde: NL_REFERENTIES.angstDepressie, key: 'angstDepressie' },
-    { label: 'Beperkt door gezondheid', value: zorgOndersteuning.beperkt, nlWaarde: NL_REFERENTIES.beperkt, key: 'beperkt' },
-    { label: 'Moeite rondkomen', value: zorgOndersteuning.moeiteRondkomen, nlWaarde: NL_REFERENTIES.moeiteRondkomen, key: 'moeiteRondkomen' },
+    { label: 'Eenzaamheid', value: eenzaamheid.totaal, nlWaarde: refZorg('eenzaam'), refNaam: refNaamZorg('eenzaam'), key: 'eenzaam' },
+    { label: 'Ernstig eenzaam', value: eenzaamheid.ernstig, nlWaarde: refZorg('ernstigEenzaam'), refNaam: refNaamZorg('ernstigEenzaam'), key: 'ernstigEenzaam' },
+    { label: 'Psychische klachten', value: mentaleGezondheid.psychischeKlachten, nlWaarde: refZorg('psychischeKlachten'), refNaam: refNaamZorg('psychischeKlachten'), key: 'psychischeKlachten' },
+    { label: 'Angst/depressie risico', value: mentaleGezondheid.angstDepressie, nlWaarde: refZorg('angstDepressie'), refNaam: refNaamZorg('angstDepressie'), key: 'angstDepressie' },
+    { label: 'Beperkt door gezondheid', value: zorgOndersteuning.beperkt, nlWaarde: refZorg('beperkt'), refNaam: refNaamZorg('beperkt'), key: 'beperkt' },
+    { label: 'Moeite rondkomen', value: zorgOndersteuning.moeiteRondkomen, nlWaarde: refZorg('moeiteRondkomen'), refNaam: refNaamZorg('moeiteRondkomen'), key: 'moeiteRondkomen' },
   ];
 
-  // Tab score berekening
-  const benchmarksZW = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
-    ? getGemeenteBenchmarks(gebiedData!, gemeenteData, zorgData, null)
-    : NL_BENCHMARKS;
+  // Tab score berekening met dezelfde actieve benchmarks
   const tabScore = berekenZorgWelzijnScore(zorgData, gebiedData?.jeugdzorgWmo, benchmarksZW);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <TabScoreHeader tabScore={tabScore} />
       {/* SECTIE 0: Aandachtspunten */}
-      <AandachtspuntenCard punten={aandachtspunten} />
+      <AandachtspuntenCard punten={aandachtspunten} benchmarkNaam={benchmarkNaam} />
 
       {/* SECTIE 1: Eenzaamheid */}
-      <Card
+      <SelectableCard
+        sectionId="zorg-eenzaamheid"
         title="Eenzaamheid"
         badge="data"
         badgeText={badgeConfig.eenzaamheid.badgeText}
@@ -211,7 +218,7 @@ export function ZorgWelzijn() {
               <div style={{ lineHeight: 1 }}>
                 {eenzaamheid.totaal !== null ? (
                   <>
-                    <span style={{ fontSize: '48px', fontWeight: 700, color: getKpiColor(eenzaamheid.totaal, NL_REFERENTIES.eenzaam, 'eenzaam') }}>
+                    <span style={{ fontSize: '48px', fontWeight: 700, color: getKpiColor(eenzaamheid.totaal, refZorg('eenzaam'), 'eenzaam') }}>
                       {eenzaamheid.totaal.toFixed(1)}
                     </span>
                     <span style={{ fontSize: '18px', fontWeight: 500, color: '#6b7280', marginLeft: '2px' }}>%</span>
@@ -224,15 +231,15 @@ export function ZorgWelzijn() {
                 voelt zich eenzaam
               </p>
               <p style={{ color: '#9ca3af', fontSize: '11px', marginTop: '2px' }}>
-                (NL: {NL_REFERENTIES.eenzaam}%)
+                ({refNaamZorg('eenzaam') === 'Nederland' ? 'NL' : refNaamZorg('eenzaam')}: {refZorg('eenzaam').toFixed(1)}%)
               </p>
             </div>
 
             {/* Sub KPIs */}
             <div style={{ display: 'flex', gap: '12px', flex: 1, flexWrap: 'wrap' }}>
-              <KpiBox label="Ernstig eenzaam" value={eenzaamheid.ernstig} nlWaarde={NL_REFERENTIES.ernstigEenzaam} kpiKey="ernstigEenzaam" />
-              <KpiBox label="Emotioneel eenzaam" value={eenzaamheid.emotioneel} nlWaarde={NL_REFERENTIES.emotioneelEenzaam} kpiKey="emotioneelEenzaam" />
-              <KpiBox label="Sociaal eenzaam" value={eenzaamheid.sociaal} nlWaarde={NL_REFERENTIES.sociaalEenzaam} kpiKey="sociaalEenzaam" />
+              <KpiBox label="Ernstig eenzaam" value={eenzaamheid.ernstig} nlWaarde={refZorg('ernstigEenzaam')} kpiKey="ernstigEenzaam" refNaam={refNaamZorg('ernstigEenzaam')} />
+              <KpiBox label="Emotioneel eenzaam" value={eenzaamheid.emotioneel} nlWaarde={refZorg('emotioneelEenzaam')} kpiKey="emotioneelEenzaam" refNaam={refNaamZorg('emotioneelEenzaam')} />
+              <KpiBox label="Sociaal eenzaam" value={eenzaamheid.sociaal} nlWaarde={refZorg('sociaalEenzaam')} kpiKey="sociaalEenzaam" refNaam={refNaamZorg('sociaalEenzaam')} />
             </div>
           </div>
 
@@ -246,6 +253,7 @@ export function ZorgWelzijn() {
                   value={vergelijking.buurt?.eenzaam}
                   naam={vergelijking.buurt?.naam}
                   isActive={true}
+                  refEenzaam={refZorg('eenzaam')}
                 />
               )}
 
@@ -256,6 +264,7 @@ export function ZorgWelzijn() {
                   value={vergelijking.wijk?.eenzaam}
                   naam={vergelijking.wijk?.naam}
                   isActive={selectedGebied?.type === 'wijk'}
+                  refEenzaam={refZorg('eenzaam')}
                 />
               )}
 
@@ -265,6 +274,7 @@ export function ZorgWelzijn() {
                 value={vergelijking.gemeente?.eenzaam}
                 naam={vergelijking.gemeente?.naam}
                 isActive={selectedGebied?.type === 'gemeente'}
+                refEenzaam={refZorg('eenzaam')}
               />
 
               {/* Nederland: altijd tonen */}
@@ -273,16 +283,18 @@ export function ZorgWelzijn() {
                 value={vergelijking.nederland?.eenzaam}
                 naam="Nederland"
                 isActive={false}
+                refEenzaam={refZorg('eenzaam')}
               />
             </div>
           )}
         </div>
-      </Card>
+      </SelectableCard>
 
       {/* Trend grafiek en Mentale Gezondheid naast elkaar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
         {/* Trend grafiek */}
-        <Card
+        <SelectableCard
+          sectionId="zorg-eenzaamheid-trend"
           title="Eenzaamheid Trend (2012-2022)"
           badge={trend?.jaren && trend.jaren.length > 0 ? 'data' : 'placeholder'}
           badgeText={badgeConfig.eenzaamheid.badgeText}
@@ -327,10 +339,11 @@ export function ZorgWelzijn() {
               <p>Geen trenddata beschikbaar</p>
             </div>
           )}
-        </Card>
+        </SelectableCard>
 
         {/* SECTIE 2: Mentale Gezondheid met progress bars */}
-        <Card
+        <SelectableCard
+          sectionId="zorg-mentaal"
           title="Mentale Gezondheid"
           badge="data"
           badgeText={badgeConfig.mentaleGezondheid.badgeText}
@@ -340,44 +353,50 @@ export function ZorgWelzijn() {
             <ProgressBarRow
               label="Hoog risico angst/depressie"
               value={mentaleGezondheid.angstDepressie}
-              nlWaarde={NL_REFERENTIES.angstDepressie}
+              nlWaarde={refZorg('angstDepressie')}
+              refNaam={refNaamZorg('angstDepressie')}
               maxValue={MENTALE_GEZONDHEID_SCHALEN.angstDepressie}
               kpiKey="angstDepressie"
             />
             <ProgressBarRow
               label="Psychische klachten"
               value={mentaleGezondheid.psychischeKlachten}
-              nlWaarde={NL_REFERENTIES.psychischeKlachten}
+              nlWaarde={refZorg('psychischeKlachten')}
+              refNaam={refNaamZorg('psychischeKlachten')}
               maxValue={MENTALE_GEZONDHEID_SCHALEN.psychischeKlachten}
               kpiKey="psychischeKlachten"
             />
             <ProgressBarRow
               label="(Heel) veel stress"
               value={mentaleGezondheid.stress}
-              nlWaarde={NL_REFERENTIES.stress}
+              nlWaarde={refZorg('stress')}
+              refNaam={refNaamZorg('stress')}
               maxValue={MENTALE_GEZONDHEID_SCHALEN.stress}
               kpiKey="stress"
             />
             <ProgressBarRow
               label="Mist emotionele steun"
               value={mentaleGezondheid.emotioneleSteun}
-              nlWaarde={NL_REFERENTIES.emotioneleSteun}
+              nlWaarde={refZorg('emotioneleSteun')}
+              refNaam={refNaamZorg('emotioneleSteun')}
               maxValue={MENTALE_GEZONDHEID_SCHALEN.emotioneleSteun}
               kpiKey="emotioneleSteun"
             />
             <ProgressBarRow
               label="(Zeer) lage veerkracht"
               value={mentaleGezondheid.veerkracht}
-              nlWaarde={NL_REFERENTIES.veerkracht}
+              nlWaarde={refZorg('veerkracht')}
+              refNaam={refNaamZorg('veerkracht')}
               maxValue={MENTALE_GEZONDHEID_SCHALEN.veerkracht}
               kpiKey="veerkracht"
             />
           </div>
-        </Card>
+        </SelectableCard>
       </div>
 
       {/* SECTIE 3: Zorg & Ondersteuning */}
-      <Card
+      <SelectableCard
+        sectionId="zorg-ondersteuning"
         title="Zorg & Ondersteuning"
         badge="data"
         badgeText={badgeConfig.zorgOndersteuning.badgeText}
@@ -388,46 +407,52 @@ export function ZorgWelzijn() {
             label="Mantelzorgers"
             value={zorgOndersteuning.mantelzorger}
             description="geeft mantelzorg"
-            nlWaarde={NL_REFERENTIES.mantelzorger}
+            nlWaarde={refZorg('mantelzorger')}
+            refNaam={refNaamZorg('mantelzorger')}
             kpiKey="mantelzorger"
           />
           <StatBox
             label="Vrijwilligerswerk"
             value={zorgOndersteuning.vrijwilligerswerk}
             description="doet vrijwilligerswerk"
-            nlWaarde={NL_REFERENTIES.vrijwilligerswerk}
+            nlWaarde={refZorg('vrijwilligerswerk')}
+            refNaam={refNaamZorg('vrijwilligerswerk')}
             kpiKey="vrijwilligerswerk"
           />
           <StatBox
             label="Ervaren gezondheid"
             value={zorgOndersteuning.ervarenGezondheid}
             description="goed/zeer goed"
-            nlWaarde={NL_REFERENTIES.ervarenGezondheid}
+            nlWaarde={refZorg('ervarenGezondheid')}
+            refNaam={refNaamZorg('ervarenGezondheid')}
             kpiKey="ervarenGezondheid"
           />
           <StatBox
             label="Langdurige aandoeningen"
             value={zorgOndersteuning.langdurigeAandoeningen}
             description="1+ aandoeningen"
-            nlWaarde={NL_REFERENTIES.langdurigeAandoeningen}
+            nlWaarde={refZorg('langdurigeAandoeningen')}
+            refNaam={refNaamZorg('langdurigeAandoeningen')}
             kpiKey="langdurigeAandoeningen"
           />
           <StatBox
             label="Beperkt door gezondheid"
             value={zorgOndersteuning.beperkt}
             description="(ernstig) beperkt"
-            nlWaarde={NL_REFERENTIES.beperkt}
+            nlWaarde={refZorg('beperkt')}
+            refNaam={refNaamZorg('beperkt')}
             kpiKey="beperkt"
           />
           <StatBox
             label="Moeite met rondkomen"
             value={zorgOndersteuning.moeiteRondkomen}
             description="financieel"
-            nlWaarde={NL_REFERENTIES.moeiteRondkomen}
+            nlWaarde={refZorg('moeiteRondkomen')}
+            refNaam={refNaamZorg('moeiteRondkomen')}
             kpiKey="moeiteRondkomen"
           />
         </div>
-      </Card>
+      </SelectableCard>
 
       {/* SECTIE 4: Jeugdzorg & WMO (CBS Kerncijfers) */}
       {gebiedData?.jeugdzorgWmo && (
@@ -442,15 +467,16 @@ export function ZorgWelzijn() {
 
 // ============ HELPER COMPONENTS ============
 
-// Aandachtspunten Card - toont indicatoren die afwijken van NL
+// Aandachtspunten Card - toont indicatoren die afwijken van de actieve referentie
 interface Aandachtspunt {
   label: string;
   value: number | null;
-  nlWaarde: number;
+  nlWaarde: number;   // referentiewaarde (NL of gemeente, afhankelijk van toggle)
+  refNaam: string;    // "Nederland" of gemeentenaam voor dit punt
   key: string;
 }
 
-function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
+function AandachtspuntenCard({ punten, benchmarkNaam }: { punten: Aandachtspunt[]; benchmarkNaam: string }) {
   // Filter en sorteer op grootste afwijking
   const sorted = [...punten]
     .filter(p => p.value !== null)
@@ -465,11 +491,12 @@ function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
   if (sorted.length === 0) return null;
 
   return (
-    <Card title="Aandachtspunten" badge="info" badgeText="Vergelijking met NL">
+    <Card title="Aandachtspunten" badge="info" badgeText={`Vergelijking met ${benchmarkNaam}`}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {sorted.map(punt => {
           const isProbleem = !HOGER_IS_BETER.includes(punt.key) ? punt.diff > 5 : punt.diff < -5;
           const color = getKpiColor(punt.value, punt.nlWaarde, punt.key);
+          const refKort = punt.refNaam === 'Nederland' ? 'NL' : punt.refNaam;
 
           return (
             <div
@@ -497,7 +524,7 @@ function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
                 minWidth: '90px',
                 textAlign: 'right'
               }}>
-                {punt.diff > 0 ? '+' : ''}{punt.diff.toFixed(1)} t.o.v. NL
+                {punt.diff > 0 ? '+' : ''}{punt.diff.toFixed(1)} t.o.v. {refKort}
               </span>
             </div>
           );
@@ -507,19 +534,22 @@ function AandachtspuntenCard({ punten }: { punten: Aandachtspunt[] }) {
   );
 }
 
-// KPI Box met kleurcodering en NL-benchmark
+// KPI Box met kleurcodering en referentie-benchmark
 function KpiBox({
   label,
   value,
   nlWaarde,
-  kpiKey
+  kpiKey,
+  refNaam,
 }: {
   label: string;
   value: number | null;
   nlWaarde: number;
   kpiKey: string;
+  refNaam: string;
 }) {
   const color = getKpiColor(value, nlWaarde, kpiKey);
+  const refKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   return (
     <div style={{
@@ -538,7 +568,7 @@ function KpiBox({
         ) : '-'}
       </p>
       <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '4px' }}>
-        (NL: {nlWaarde}%)
+        ({refKort}: {nlWaarde.toFixed(1)}%)
       </p>
     </div>
   );
@@ -549,12 +579,14 @@ function ComparisonColumn({
   label,
   value,
   naam,
-  isActive
+  isActive,
+  refEenzaam,
 }: {
   label: string;
   value?: number | null;
   naam?: string;
   isActive: boolean;
+  refEenzaam: number;
 }) {
   return (
     <div style={{
@@ -573,7 +605,7 @@ function ComparisonColumn({
           <p style={{
             fontSize: '22px',
             fontWeight: 700,
-            color: getEenzaamheidColor(value),
+            color: getEenzaamheidColor(value, refEenzaam),
             margin: 0,
             lineHeight: 1
           }}>
@@ -605,15 +637,18 @@ function ProgressBarRow({
   label,
   value,
   nlWaarde,
+  refNaam,
   maxValue,
   kpiKey
 }: {
   label: string;
   value: number | null;
   nlWaarde: number;
+  refNaam: string;
   maxValue: number;
   kpiKey: string;
 }) {
+  const refKort = refNaam === 'Nederland' ? 'NL' : refNaam;
   if (value === null) {
     return (
       <div style={{
@@ -663,7 +698,7 @@ function ProgressBarRow({
           borderRadius: '4px'
         }} />
 
-        {/* NL marker */}
+        {/* Referentie marker */}
         <div style={{
           position: 'absolute',
           left: `${nlPercentage}%`,
@@ -674,7 +709,7 @@ function ProgressBarRow({
         }}>▼</div>
       </div>
 
-      {/* NL referentie */}
+      {/* Referentie (NL of gemeente) */}
       <div style={{
         display: 'flex',
         justifyContent: 'space-between',
@@ -682,7 +717,7 @@ function ProgressBarRow({
         color: '#6b7280',
         marginTop: '4px'
       }}>
-        <span>NL: {nlWaarde.toFixed(1)}%</span>
+        <span>{refKort}: {nlWaarde.toFixed(1)}%</span>
         <span style={{ color: diff > 0 ? '#ef4444' : '#22c55e' }}>
           {diff > 0 ? '+' : ''}{diff.toFixed(1)}
         </span>
@@ -691,12 +726,13 @@ function ProgressBarRow({
   );
 }
 
-// StatBox met kleurcodering en NL-benchmark
+// StatBox met kleurcodering en referentie-benchmark
 function StatBox({
   label,
   value,
   description,
   nlWaarde,
+  refNaam,
   kpiKey,
   unit = '%',
   decimals = 1
@@ -705,11 +741,13 @@ function StatBox({
   value: number | null;
   description: string;
   nlWaarde: number;
+  refNaam: string;
   kpiKey: string;
   unit?: string;
   decimals?: number;
 }) {
   const color = getKpiColor(value, nlWaarde, kpiKey);
+  const refKort = refNaam === 'Nederland' ? 'NL' : refNaam;
 
   return (
     <div style={{
@@ -727,7 +765,7 @@ function StatBox({
         ) : '-'}
       </p>
       <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>{description}</p>
-      <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>(NL: {nlWaarde}{unit})</p>
+      <p style={{ fontSize: '10px', color: '#9ca3af', marginTop: '2px' }}>({refKort}: {nlWaarde.toFixed(1)}{unit})</p>
     </div>
   );
 }

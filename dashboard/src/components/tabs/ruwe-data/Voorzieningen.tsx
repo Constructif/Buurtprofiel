@@ -12,9 +12,10 @@ import {
   type VoorzieningType,
 } from '../../../services/overpass';
 import { Card } from '../../ui/Card';
+import { SelectableCard, SelectableWrapper } from '../../ui/SelectableCard';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenVoorzieningenScore } from '../../../utils/scoring';
-import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
 import { logger } from '../../../utils/logger';
 
 // Fix voor Leaflet default marker icons in Vite
@@ -162,7 +163,8 @@ function MapController({ geometry, voorzieningen, selectedVoorzieningId }: MapCo
 }
 
 export function Voorzieningen() {
-  const { selectedGebied, getVoorzieningenCache, waitForVoorzieningen, gebiedData, benchmarkType, gemeenteData } = useGebiedStore();
+  const { selectedGebied, getVoorzieningenCache, waitForVoorzieningen, gebiedData } = useGebiedStore();
+  const { set: benchmarksVoorz } = useActiveBenchmarks();
 
   // State voor voorzieningen data
   const [geometry, setGeometry] = useState<GeoJSON.Feature | null>(null);
@@ -357,12 +359,11 @@ export function Voorzieningen() {
     );
   }
 
-  // Tab score berekening
+  // Tab score berekening met de actieve benchmarks (schakelt mee met de toggle).
+  // Tijdens het laden van voorzieningen is de score nog niet representatief
+  // (0 voorzieningen → 'weinig data'), dus tonen we de header pas als laden klaar is.
   const bevolking = gebiedData?.bevolking.totaal ?? 0;
-  const benchmarksVoorz = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
-    ? getGemeenteBenchmarks(gebiedData!, gemeenteData, null, null)
-    : NL_BENCHMARKS;
-  const tabScore = bevolking > 0
+  const tabScore = (bevolking > 0 && !loading)
     ? berekenVoorzieningenScore(bevolking, voorzieningen, benchmarksVoorz)
     : null;
 
@@ -501,7 +502,7 @@ export function Voorzieningen() {
       </div>
 
       {/* Kaart - Midden (Sticky) */}
-      <div className="voorzieningen-map" style={{
+      <SelectableWrapper sectionId="voorzieningen-kaart" style={{
         position: isMobile ? 'static' : 'sticky',
         top: '16px',
         height: isMobile ? '400px' : 'calc(100vh - 240px)',
@@ -545,10 +546,10 @@ export function Voorzieningen() {
           />
           <MapController geometry={geometry} voorzieningen={filteredVoorzieningen} selectedVoorzieningId={selectedVoorziening} />
         </MapContainer>
-      </div>
+      </SelectableWrapper>
 
       {/* Details lijst - Rechts (Sticky) */}
-      <div className="voorzieningen-details" style={{
+      <SelectableWrapper sectionId="voorzieningen-lijst" style={{
         position: isMobile ? 'static' : 'sticky',
         top: '16px',
         height: isMobile ? 'auto' : 'calc(100vh - 240px)',
@@ -694,7 +695,7 @@ export function Voorzieningen() {
             {loading ? 'Voorzieningen laden...' : 'Selecteer voorzieningen om details te zien'}
           </Card>
         )}
-      </div>
+      </SelectableWrapper>
     </div>
     </div>
   );

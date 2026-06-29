@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useGebiedStore } from '../../store/gebiedStore';
-import { loadAllGebieden, loadGebiedData } from '../../services/cbs';
+import { loadAllGebieden } from '../../services/cbs';
 import type { Gebied } from '../../types/gebied';
 import { logger } from '../../utils/logger';
 
@@ -14,14 +14,9 @@ export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
   const {
     allGebieden,
     setAllGebieden,
-    setSelectedGebied,
-    setGebiedData,
-    setGemeenteData,
+    selectAndLoadGebied,
     isLoadingGebieden,
     setIsLoadingGebieden,
-    setIsLoadingData,
-    prefetchVoorzieningen,
-    selectedJaar,
     selectedGemeenteFilter,
     setSelectedGemeenteFilter,
   } = useGebiedStore();
@@ -92,19 +87,8 @@ export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
       setSelectedGemeenteFilter(gebied);
       setQuery('');
 
-      // Laad ook gemeente data op de achtergrond
-      setSelectedGebied(gebied);
-      setIsLoadingData(true);
-      try {
-        const { gebiedData, gemeenteData } = await loadGebiedData(gebied, selectedJaar);
-        setGebiedData(gebiedData);
-        setGemeenteData(gemeenteData);
-        prefetchVoorzieningen(gebied.code);
-      } catch (error) {
-        logger.error('Fout bij laden data:', error);
-      } finally {
-        setIsLoadingData(false);
-      }
+      // Laad gemeente data op de achtergrond (race-safe via de store-actie)
+      void selectAndLoadGebied(gebied);
 
       // Dropdown open houden zodat gebruiker wijken/buurten kan bekijken
       setTimeout(() => inputRef.current?.focus(), 100);
@@ -112,24 +96,13 @@ export function GebiedSearch({ onSelect }: { onSelect?: () => void } = {}) {
     }
 
     // Klik op wijk/buurt (of gemeente wanneer al gefilterd) = normaal selecteren
-    setSelectedGebied(gebied);
     setIsOpen(false);
     setQuery('');
     setSelectedGemeenteFilter(null);
     onSelect?.();
 
-    setIsLoadingData(true);
-    try {
-      const { gebiedData, gemeenteData } = await loadGebiedData(gebied, selectedJaar);
-      setGebiedData(gebiedData);
-      setGemeenteData(gemeenteData);
-      // Start voorzieningen prefetch parallel (fire-and-forget)
-      prefetchVoorzieningen(gebied.code);
-    } catch (error) {
-      logger.error('Fout bij laden data:', error);
-    } finally {
-      setIsLoadingData(false);
-    }
+    // selectAndLoadGebied bewaakt zelf tegen race conditions bij snel wisselen.
+    void selectAndLoadGebied(gebied);
   }
 
   return (

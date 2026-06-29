@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { Card } from '../../ui/Card';
+import { SelectableCard } from '../../ui/SelectableCard';
 import { CardTrendChart } from '../../ui/CardTrendChart';
 import { InfoGrid } from '../../ui/InfoGrid';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenWonenScore } from '../../../utils/scoring';
-import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
 import { fetchKerncijfersForYear, fetchKerncijfersAllYears } from '../../../services/cbs';
 import { useCardYear } from '../../../hooks/useCardYear';
 import {
@@ -29,7 +29,8 @@ function formatNumber(num: number): string {
 const COLORS = ['#eb6608', '#1d1d1b', '#3498db', '#2ecc71'];
 
 export function Wonen() {
-  const { gebiedData, selectedGebied, isLoadingData, benchmarkType, gemeenteData } = useGebiedStore();
+  const { gebiedData, selectedGebied, isLoadingData } = useGebiedStore();
+  const { set: benchmarks } = useActiveBenchmarks();
 
   // Alle hooks MOETEN boven early returns staan (React hooks regels)
   const code = gebiedData?.code ?? '';
@@ -112,10 +113,7 @@ export function Wonen() {
     ? bevolkingsDynamiek.jaren[bevolkingsDynamiek.jaren.length - 1]?.jaar
     : undefined;
 
-  // Score
-  const benchmarks = benchmarkType === 'gemeente' && selectedGebied.type !== 'gemeente'
-    ? getGemeenteBenchmarks(gebiedData, gemeenteData, null, null)
-    : NL_BENCHMARKS;
+  // Score met de actieve benchmarks (schakelt mee met de toggle)
   const tabScore = berekenWonenScore(gebiedData, benchmarks);
 
   return (
@@ -123,7 +121,7 @@ export function Wonen() {
       <TabScoreHeader tabScore={tabScore} />
 
       {/* Woningvoorraad */}
-      <Card title="Woningvoorraad" badge="data" year={voorraad.jaar}
+      <SelectableCard sectionId="wonen-voorraad" title="Woningvoorraad" badge="data" year={voorraad.jaar}
         onYearChange={voorraadCard.handleYearChange} availableYears={voorraadCard.availableYears}
         activeYearMode={voorraadCard.activeMode} yearsWithData={voorraadCard.yearsWithData}>
         {voorraadCard.isLoading ? (
@@ -143,12 +141,12 @@ export function Wonen() {
             ]}
           />
         )}
-      </Card>
+      </SelectableCard>
 
       {/* Charts grid */}
       <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Koop vs Huur */}
-        <Card title="Koop vs Huur" badge="data" year={koopHuur.jaar}
+        <SelectableCard sectionId="wonen-koophuur" title="Koop vs Huur" badge="data" year={koopHuur.jaar}
           onYearChange={koopHuurCard.handleYearChange} availableYears={koopHuurCard.availableYears}
           activeYearMode={koopHuurCard.activeMode} yearsWithData={koopHuurCard.yearsWithData}>
           {koopHuurCard.isLoading ? (
@@ -173,10 +171,10 @@ export function Wonen() {
               </ResponsiveContainer>
             </div>
           )}
-        </Card>
+        </SelectableCard>
 
         {/* Woningtypes */}
-        <Card title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? gebiedData.kerncijfersJaar : undefined}>
+        <SelectableCard sectionId="wonen-woningtypes" title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? gebiedData.kerncijfersJaar : undefined}>
           {hasWoningtypeData ? (
             <div style={{ height: '320px' }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -197,11 +195,11 @@ export function Wonen() {
               <p>Geen woningtype data beschikbaar voor dit gebied</p>
             </div>
           )}
-        </Card>
+        </SelectableCard>
       </div>
 
       {/* Huurdetails */}
-      <Card title="Huurwoningen Detail" badge="data" year={huurDetail.jaar}
+      <SelectableCard sectionId="wonen-huurdetail" title="Huurwoningen Detail" badge="data" year={huurDetail.jaar}
         onYearChange={huurDetailCard.handleYearChange} availableYears={huurDetailCard.availableYears}
         activeYearMode={huurDetailCard.activeMode} yearsWithData={huurDetailCard.yearsWithData}>
         {huurDetailCard.isLoading ? (
@@ -220,10 +218,11 @@ export function Wonen() {
             ]}
           />
         )}
-      </Card>
+      </SelectableCard>
 
       {/* Verhuisbewegingen */}
-      <Card
+      <SelectableCard
+        sectionId="wonen-verhuisbewegingen"
         title={`Verhuisbewegingen${gebiedData.gemeenteNaam && selectedGebied?.type !== 'gemeente' ? ` - Gemeente ${gebiedData.gemeenteNaam}` : ''}`}
         badge={hasVerhuisData ? "data" : "placeholder"}
         year={verhuisDataJaar}
@@ -265,14 +264,14 @@ export function Wonen() {
             <p>Geen verhuisdata beschikbaar</p>
           </div>
         )}
-      </Card>
+      </SelectableCard>
 
       {/* Woningcorporaties - placeholder */}
-      <Card title="Woningcorporaties" badge="placeholder">
+      <SelectableCard sectionId="wonen-corporaties" title="Woningcorporaties" badge="placeholder">
         <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
           <p>Nog geen data beschikbaar</p>
         </div>
-      </Card>
+      </SelectableCard>
     </div>
   );
 }

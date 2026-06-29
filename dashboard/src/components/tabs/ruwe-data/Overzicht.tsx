@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { SelectableWrapper } from '../../ui/SelectableCard';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { BuurtMap } from '../../maps/BuurtMap';
 import {
   berekenBuurtprofielScore,
   getClassificatieKleur,
 } from '../../../utils/scoring';
-import { NL_BENCHMARKS, getGemeenteBenchmarks } from '../../../utils/benchmarks';
+import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
 import { fetchZorgWelzijnData } from '../../../services/rivm';
 import { fetchLeefomgevingData } from '../../../services/leefomgeving';
 import type { ZorgWelzijnData } from '../../../types/zorgWelzijn';
@@ -16,12 +17,15 @@ import { logger } from '../../../utils/logger';
 export function Overzicht() {
   const {
     gebiedData, selectedGebied, isLoadingData, getVoorzieningenCache,
-    benchmarkType, gemeenteData, selectedJaar,
+    selectedJaar,
   } = useGebiedStore();
 
   const [zorgData, setZorgData] = useState<ZorgWelzijnData | null>(null);
   const [leefomgevingData, setLeefomgevingData] = useState<LeefomgevingData | null>(null);
   const [isLoadingExtra, setIsLoadingExtra] = useState(false);
+
+  // Actieve benchmarks: schakelt mee met de Nederland/gemeente-toggle.
+  const { set: benchmarks } = useActiveBenchmarks(zorgData, leefomgevingData);
 
   // Fetch zorg & leefomgeving data voor scoreberekening
   useEffect(() => {
@@ -72,12 +76,8 @@ export function Overzicht() {
   const voorzieningenCache = selectedGebied ? getVoorzieningenCache(selectedGebied.code) : null;
   const voorzieningen = voorzieningenCache?.voorzieningen ?? [];
 
-  // Bepaal benchmarks
-  const isGemeente = selectedGebied?.type === 'gemeente';
-  const activeBenchmarkType = isGemeente ? 'nederland' : benchmarkType;
-  const benchmarks = (activeBenchmarkType === 'gemeente' && gebiedData)
-    ? getGemeenteBenchmarks(gebiedData, gemeenteData, zorgData, leefomgevingData)
-    : NL_BENCHMARKS;
+  // De actieve vergelijking (nederland of gemeente) bepaalt de fallback-waarschuwing per dimensie.
+  const activeBenchmarkType = benchmarks.type;
 
   // Bereken score (gememoized — herberekent alleen bij gewijzigde inputs)
   const buurtprofiel = useMemo(
@@ -117,19 +117,26 @@ export function Overzicht() {
       <section>
         <div className="overzicht-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '16px', alignItems: 'stretch' }}>
           {/* Kaart */}
-          <div className="overzicht-map" style={{ borderRadius: '8px', overflow: 'hidden', height: '100%', minHeight: '400px' }}>
+          <SelectableWrapper sectionId="overzicht-kaart" style={{ borderRadius: '8px', overflow: 'hidden', height: '100%', minHeight: '400px' }}>
             <BuurtMap />
-          </div>
+          </SelectableWrapper>
 
           {/* Score Sectie */}
-          <div className="overzicht-stats" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <SelectableWrapper sectionId="overzicht-score" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {/* Hoofdscore */}
             <HoofdscoreCard buurtprofiel={buurtprofiel} isLoadingExtra={isLoadingExtra} />
 
             {/* Dimensie Cards */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0' }}>
               {Object.values(buurtprofiel.tabs).map((tab) => (
-                <DimensieCard key={tab.naam} tab={tab} benchmarkType={activeBenchmarkType} />
+                <DimensieCard
+                  key={tab.naam}
+                  tab={tab}
+                  benchmarkType={activeBenchmarkType}
+                  // Voorzieningen worden async op de achtergrond geladen; tot de cache
+                  // er is, is een 'weinig data'-score nog niet definitief maar nog ladend.
+                  isLoading={tab.naam === 'Voorzieningen' && !voorzieningenCache}
+                />
               ))}
             </div>
 
@@ -139,7 +146,7 @@ export function Overzicht() {
                 {isLoadingExtra ? 'Zorg & Leefomgeving data laden...' : 'Voorzieningen worden geladen...'}
               </div>
             )}
-          </div>
+          </SelectableWrapper>
         </div>
       </section>
     </div>
@@ -289,7 +296,7 @@ function HoofdscoreCard({
 
 // --- Dimensie Card ---
 
-function DimensieCard({ tab, benchmarkType }: { tab: TabScore; benchmarkType: 'nederland' | 'gemeente' }) {
+function DimensieCard({ tab, benchmarkType, isLoading = false }: { tab: TabScore; benchmarkType: 'nederland' | 'gemeente'; isLoading?: boolean }) {
   const kleur = tab.isGemeten ? getClassificatieKleur(tab.classificatie) : '#9ca3af';
 
   // Toon of data werkelijk gemeente-specifiek is, of terugvalt op NL
@@ -318,16 +325,26 @@ function DimensieCard({ tab, benchmarkType }: { tab: TabScore; benchmarkType: 'n
               (gem. data)
             </span>
           )}
-          {tab.confidence !== 'high' && tab.isGemeten && (
+          {isLoading ? (
             <span style={{ fontStyle: 'italic', marginLeft: '4px' }}>
-              ({tab.confidence === 'medium' ? 'beperkt' : 'weinig data'})
+              (laden…)
             </span>
+          ) : (
+            tab.confidence !== 'high' && tab.isGemeten && (
+              <span style={{ fontStyle: 'italic', marginLeft: '4px' }}>
+                ({tab.confidence === 'medium' ? 'beperkt' : 'weinig data'})
+              </span>
+            )
           )}
         </div>
       </div>
 
       {/* Rechts: score */}
-      {tab.isGemeten ? (
+      {isLoading ? (
+        <span style={{ fontSize: '11px', color: '#9ca3af', fontStyle: 'italic' }}>
+          laden…
+        </span>
+      ) : tab.isGemeten ? (
         <div style={{ textAlign: 'right' }}>
           <div style={{ fontSize: '20px', fontWeight: 700, color: kleur }}>
             {tab.score.toFixed(1)}

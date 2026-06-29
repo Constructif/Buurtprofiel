@@ -76,6 +76,40 @@ function BenchmarkToggle() {
   );
 }
 
+function SelectieModeToggle() {
+  const { isSelectieModus, setSelectieModus, selectedGebied } = useGebiedStore();
+  if (!selectedGebied) return null;
+  return (
+    <button
+      onClick={() => setSelectieModus(!isSelectieModus)}
+      title={isSelectieModus ? 'Selectie modus uitschakelen' : 'Kaarten selecteren voor presentatie'}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        padding: '5px 10px',
+        fontSize: '11px',
+        fontWeight: isSelectieModus ? 600 : 400,
+        border: `1.5px solid ${isSelectieModus ? '#eb6608' : '#d1d5db'}`,
+        borderRadius: '6px',
+        cursor: 'pointer',
+        backgroundColor: isSelectieModus ? '#fff7f0' : 'white',
+        color: isSelectieModus ? '#eb6608' : '#6b7280',
+        whiteSpace: 'nowrap',
+        flexShrink: 0,
+      }}
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24"
+        fill={isSelectieModus ? '#eb6608' : 'none'}
+        stroke={isSelectieModus ? '#eb6608' : '#6b7280'}
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+      </svg>
+      {isSelectieModus ? 'Selectie aan' : 'Selecteer'}
+    </button>
+  );
+}
+
 export function SubTabs() {
   const { mainTab, subTab, setSubTab } = useGebiedStore();
 
@@ -83,9 +117,9 @@ export function SubTabs() {
     ? ruweDataTabs
     : mainTab === 'wijkronde'
       ? wijkrondeTabs
-      : []; // nader-onderzoek heeft geen subtabs
+      : []; // nader-onderzoek en presentatie hebben geen subtabs
 
-  const showControls = mainTab === 'ruwe-data';
+  const showControls = mainTab === 'ruwe-data' || mainTab === 'wijkronde';
 
   if (tabs.length === 0) return null;
 
@@ -137,7 +171,7 @@ export function SubTabs() {
             </button>
           ))}
         </div>
-        {/* Desktop: controls naast tabs (alleen bij Ruwe Data) */}
+        {/* Desktop: controls naast tabs */}
         {showControls && (
           <div className="sub-tabs-controls-desktop" style={{
             display: 'flex',
@@ -146,13 +180,14 @@ export function SubTabs() {
             flexShrink: 0,
             paddingRight: '4px',
           }}>
-            <BenchmarkToggle />
-            <YearSelector />
+            {mainTab === 'ruwe-data' && <BenchmarkToggle />}
+            {mainTab === 'ruwe-data' && <YearSelector />}
+            <SelectieModeToggle />
           </div>
         )}
       </div>
 
-      {/* Mobiel: controls op eigen regel (alleen bij Ruwe Data) */}
+      {/* Mobiel: controls op eigen regel */}
       {showControls && (
         <div className="sub-tabs-controls-mobile" style={{
           display: 'none',
@@ -162,8 +197,9 @@ export function SubTabs() {
           padding: '6px 12px',
           borderTop: '1px solid #e5e7eb',
         }}>
-          <BenchmarkToggle />
-          <YearSelector />
+          {mainTab === 'ruwe-data' && <BenchmarkToggle />}
+          {mainTab === 'ruwe-data' && <YearSelector />}
+          <SelectieModeToggle />
         </div>
       )}
     </nav>

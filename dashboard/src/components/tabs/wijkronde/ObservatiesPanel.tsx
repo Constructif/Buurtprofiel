@@ -7,6 +7,7 @@ import { logger } from '../../../utils/logger';
 import { ObservatieMap } from './ObservatieMap';
 import { ObservatieForm } from './ObservatieForm';
 import { ObservatieDetail } from './ObservatieDetail';
+import { SelectableWrapper } from '../../ui/SelectableCard';
 
 export function ObservatiesPanel() {
   const selectedGebied = useGebiedStore((s) => s.selectedGebied);
@@ -133,7 +134,7 @@ export function ObservatiesPanel() {
       alignItems: 'start',
     }}>
       {/* Kaart-kolom */}
-      <div>
+      <SelectableWrapper sectionId="wijkronde-observatie-kaart">
         {/* Werkbalk boven de kaart */}
         <div style={{
           display: 'flex',
@@ -288,9 +289,10 @@ export function ObservatiesPanel() {
             ? 'Tik op de kaart om punten te plaatsen die het gebied afbakenen (minimaal 3).'
             : 'Tik op de kaart om een observatie toe te voegen'}
         </p>
-      </div>
+      </SelectableWrapper>
 
       {/* Observatie lijst — op desktop sticky rechterkolom */}
+      <SelectableWrapper sectionId="wijkronde-observatie-lijst">
       {loading ? (
         <p style={{ textAlign: 'center', color: '#9ca3af', padding: '20px' }}>Laden...</p>
       ) : observaties.length > 0 ? (
@@ -370,6 +372,7 @@ export function ObservatiesPanel() {
           Nog geen observaties. Tik op de kaart om te beginnen.
         </p>
       )}
+      </SelectableWrapper>
 
       {/* Formulier als bottom sheet */}
       {formCoords && (
