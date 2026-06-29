@@ -50,7 +50,7 @@ function StatBox({ label, value, color, subLabel }: { label: string; value: numb
 
 export function WerkInkomenSection({ sectionId }: { sectionId: string }) {
   const { gebiedData, selectedGebied } = useGebiedStore();
-  const { ref, refNaamVoor, benchmarkNaam } = useActiveBenchmarks();
+  const { ref, refNaamVoor } = useActiveBenchmarks();
   const refKort = (k: Parameters<typeof ref>[0]) => refNaamVoor(k) === 'Nederland' ? 'NL' : refNaamVoor(k);
 
   const code = gebiedData?.code ?? '';

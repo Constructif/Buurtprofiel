@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
-import { SelectableCard, SelectableWrapper } from '../../ui/SelectableCard';
+import { SelectableCard } from '../../ui/SelectableCard';
 import { fetchLeefomgevingData } from '../../../services/leefomgeving';
 import type { LeefomgevingData, LeefomgevingVergelijkingNiveau } from '../../../types/leefomgeving';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';

@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useGebiedStore } from '../../../../store/gebiedStore';
 import { CardTrendChart } from '../../../ui/CardTrendChart';
 import { fetchCriminaliteitForYear, fetchCriminaliteitAllYears } from '../../../../services/cbs';

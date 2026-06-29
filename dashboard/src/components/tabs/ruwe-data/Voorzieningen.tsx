@@ -12,7 +12,7 @@ import {
   type VoorzieningType,
 } from '../../../services/overpass';
 import { Card } from '../../ui/Card';
-import { SelectableCard, SelectableWrapper } from '../../ui/SelectableCard';
+import { SelectableWrapper } from '../../ui/SelectableCard';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenVoorzieningenScore } from '../../../utils/scoring';
 import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
