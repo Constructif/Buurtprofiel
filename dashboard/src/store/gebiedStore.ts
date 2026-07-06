@@ -90,6 +90,13 @@ interface GebiedStore {
   subTab: string;
   setSubTab: (tab: string) => void;
 
+  // Interne sub-tab binnen het gecombineerde tabblad "Fysieke omgeving"
+  fysiekeOmgevingSubTab: 'wonen' | 'leefomgeving';
+  setFysiekeOmgevingSubTab: (tab: 'wonen' | 'leefomgeving') => void;
+  // Interne sub-tab binnen het gecombineerde tabblad "Sociale kenmerken"
+  socialeKenmerkenSubTab: 'bewoners' | 'zorg' | 'economie';
+  setSocialeKenmerkenSubTab: (tab: 'bewoners' | 'zorg' | 'economie') => void;
+
   // Wijkronde
   actieveRonde: Wijkronde | null;
   setActieveRonde: (ronde: Wijkronde | null) => void;
@@ -127,6 +134,20 @@ function saveToStorage(key: string, value: unknown) {
 
 function removeFromStorage(key: string) {
   try { localStorage.removeItem(key); } catch { /* ignore */ }
+}
+
+// ── Migratie oude sub-tab structuur (Wonen/Leefomgeving/Bewoners/Zorg/Economie → gecombineerde tabbladen) ──
+const SUBTAB_MIGRATION: Record<string, string> = {
+  wonen: 'fysieke-omgeving',
+  leefomgeving: 'fysieke-omgeving',
+  bewoners: 'sociale-kenmerken',
+  zorg: 'sociale-kenmerken',
+  economie: 'sociale-kenmerken',
+};
+
+function migrateSubTab(raw: string | null): string {
+  if (!raw) return 'overzicht';
+  return SUBTAB_MIGRATION[raw] ?? raw;
 }
 
 export const useGebiedStore = create<GebiedStore>((set, get) => ({
@@ -381,10 +402,30 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
     saveToStorage('bp_subTab', newSubTab);
     set({ mainTab: tab, subTab: newSubTab });
   },
-  subTab: loadFromStorage<string>('bp_subTab') || 'overzicht',
+  subTab: migrateSubTab(loadFromStorage<string>('bp_subTab')),
   setSubTab: (tab) => {
     saveToStorage('bp_subTab', tab);
     set({ subTab: tab });
+  },
+
+  fysiekeOmgevingSubTab: (() => {
+    const rawSubTab = loadFromStorage<string>('bp_subTab');
+    if (rawSubTab === 'wonen' || rawSubTab === 'leefomgeving') return rawSubTab;
+    return loadFromStorage<'wonen' | 'leefomgeving'>('bp_fysiekeOmgevingSubTab') || 'wonen';
+  })(),
+  setFysiekeOmgevingSubTab: (tab) => {
+    saveToStorage('bp_fysiekeOmgevingSubTab', tab);
+    set({ fysiekeOmgevingSubTab: tab });
+  },
+
+  socialeKenmerkenSubTab: (() => {
+    const rawSubTab = loadFromStorage<string>('bp_subTab');
+    if (rawSubTab === 'bewoners' || rawSubTab === 'zorg' || rawSubTab === 'economie') return rawSubTab;
+    return loadFromStorage<'bewoners' | 'zorg' | 'economie'>('bp_socialeKenmerkenSubTab') || 'bewoners';
+  })(),
+  setSocialeKenmerkenSubTab: (tab) => {
+    saveToStorage('bp_socialeKenmerkenSubTab', tab);
+    set({ socialeKenmerkenSubTab: tab });
   },
 
   actieveRonde: null,

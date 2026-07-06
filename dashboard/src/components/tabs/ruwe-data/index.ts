@@ -6,3 +6,5 @@ export { Voorzieningen } from './Voorzieningen';
 export { ZorgWelzijn } from './ZorgWelzijn';
 export { WerkInkomen } from './WerkInkomen';
 export { Leefomgeving } from './Leefomgeving';
+export { FysiekeOmgeving } from './FysiekeOmgeving';
+export { SocialeKenmerken } from './SocialeKenmerken';

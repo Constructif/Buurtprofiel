@@ -4,7 +4,7 @@ import { MainTabs } from './components/layout/MainTabs';
 import { SubTabs } from './components/layout/SubTabs';
 import { useGebiedStore } from './store/gebiedStore';
 import { loadGebiedData } from './services/cbs';
-import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn, WerkInkomen, Leefomgeving } from './components/tabs/ruwe-data';
+import { Overzicht, FysiekeOmgeving, SocialeKenmerken, Veiligheid, Voorzieningen } from './components/tabs/ruwe-data';
 import { WijkrondeTab } from './components/tabs/wijkronde';
 import { NaderOnderzoekTab } from './components/tabs/nader-onderzoek';
 import { ProfielTab } from './components/tabs/profiel';
@@ -77,20 +77,14 @@ function App() {
     switch (subTab) {
       case 'overzicht':
         return <Overzicht />;
-      case 'bewoners':
-        return <Bewoners />;
-      case 'wonen':
-        return <Wonen />;
+      case 'fysieke-omgeving':
+        return <FysiekeOmgeving />;
+      case 'sociale-kenmerken':
+        return <SocialeKenmerken />;
       case 'veiligheid':
         return <Veiligheid />;
       case 'voorzieningen':
         return <Voorzieningen />;
-      case 'zorg':
-        return <ZorgWelzijn />;
-      case 'economie':
-        return <WerkInkomen />;
-      case 'leefomgeving':
-        return <Leefomgeving />;
       default:
         return <Overzicht />;
     }

@@ -3,13 +3,10 @@ import { YearSelector } from '../ui/YearSelector';
 
 const ruweDataTabs = [
   { id: 'overzicht', label: 'Overzicht' },
-  { id: 'bewoners', label: 'Bewoners' },
-  { id: 'wonen', label: 'Wonen' },
+  { id: 'fysieke-omgeving', label: 'Fysieke omgeving' },
+  { id: 'sociale-kenmerken', label: 'Sociale kenmerken' },
   { id: 'veiligheid', label: 'Veiligheid' },
   { id: 'voorzieningen', label: 'Voorzieningen' },
-  { id: 'zorg', label: 'Zorg & Welzijn' },
-  { id: 'economie', label: 'Werk & Inkomen' },
-  { id: 'leefomgeving', label: 'Leefomgeving' },
 ];
 
 const wijkrondeTabs = [
