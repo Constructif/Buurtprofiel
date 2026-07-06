@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { SelectableCard } from '../../ui/SelectableCard';
+import { Card } from '../../ui/Card';
 import { CardTrendChart } from '../../ui/CardTrendChart';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenVeiligheidScore } from '../../../utils/scoring';
@@ -128,7 +128,7 @@ export function Veiligheid() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <TabScoreHeader tabScore={tabScore} />
       {/* Veiligheidsscore */}
-      <SelectableCard sectionId="veiligheid-score" title="Veiligheidsscore" badge="data" year={dataJaar}>
+      <Card title="Veiligheidsscore" badge="data" year={dataJaar}>
         <div style={{ padding: '16px 20px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '32px', flexWrap: 'wrap' }}>
             <div style={{ textAlign: 'center', minWidth: '120px', position: 'relative' }}>
@@ -151,12 +151,12 @@ export function Veiligheid() {
             )}
           </div>
         </div>
-      </SelectableCard>
+      </Card>
 
       {/* Charts naast elkaar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
         {/* Criminaliteit per type - pie chart */}
-        <SelectableCard sectionId="veiligheid-crimtype" title="Criminaliteit per Type" badge={criminaliteit.totaal > 0 ? "data" : "placeholder"} year={dataJaar}>
+        <Card title="Criminaliteit per Type" badge={criminaliteit.totaal > 0 ? "data" : "placeholder"} year={dataJaar}>
           {criminaliteit.totaal > 0 ? (
             <div style={{ display: 'flex', gap: '16px', alignItems: 'center', padding: '8px 0', flexWrap: 'wrap', justifyContent: 'center' }}>
               <div style={{ width: '160px', height: '160px', flexShrink: 0, minWidth: '160px' }}>
@@ -198,10 +198,10 @@ export function Veiligheid() {
               <p>Geen criminaliteitsdata beschikbaar</p>
             </div>
           )}
-        </SelectableCard>
+        </Card>
 
         {/* Trend - 5 jaar */}
-        <SelectableCard sectionId="veiligheid-trend" title="Trend (5 jaar)" badge={gebiedData.criminaliteitTrend?.jaren && gebiedData.criminaliteitTrend.jaren.length > 0 ? "data" : "placeholder"} year={dataJaar}>
+        <Card title="Trend (5 jaar)" badge={gebiedData.criminaliteitTrend?.jaren && gebiedData.criminaliteitTrend.jaren.length > 0 ? "data" : "placeholder"} year={dataJaar}>
           {gebiedData.criminaliteitTrend?.jaren && gebiedData.criminaliteitTrend.jaren.length > 0 ? (
             <div style={{ height: '200px' }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -232,11 +232,11 @@ export function Veiligheid() {
               <p>Geen trenddata beschikbaar</p>
             </div>
           )}
-        </SelectableCard>
+        </Card>
       </div>
 
       {/* Criminaliteitscijfers */}
-      <SelectableCard sectionId="veiligheid-cijfers" title="Criminaliteitscijfers" badge="data" year={cijfers.jaar}
+      <Card title="Criminaliteitscijfers" badge="data" year={cijfers.jaar}
         onYearChange={crimCijfersCard.handleYearChange} availableYears={crimCijfersCard.availableYears}
         activeYearMode={crimCijfersCard.activeMode} yearsWithData={crimCijfersCard.yearsWithData}>
         {crimCijfersCard.isLoading ? (
@@ -261,12 +261,12 @@ export function Veiligheid() {
             <StatBox label="Verkeer" value={cijfers.crim.verkeer} />
           </div>
         )}
-      </SelectableCard>
+      </Card>
 
       {/* Detail grids - elk individueel switchbaar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '20px' }}>
         {/* Vermogensdelicten */}
-        <SelectableCard sectionId="veiligheid-vermogen" title="Vermogensdelicten" badge="data" year={vermogen.jaar}
+        <Card title="Vermogensdelicten" badge="data" year={vermogen.jaar}
           onYearChange={vermogenCard.handleYearChange} availableYears={vermogenCard.availableYears}
           activeYearMode={vermogenCard.activeMode} yearsWithData={vermogenCard.yearsWithData}>
           {vermogenCard.isLoading ? (
@@ -285,10 +285,10 @@ export function Veiligheid() {
               <MeldingRow label="Winkeldiefstal" value={vermogen.crim.winkeldiefstal} />
             </div>
           )}
-        </SelectableCard>
+        </Card>
 
         {/* Geweldsdelicten */}
-        <SelectableCard sectionId="veiligheid-geweld" title="Geweldsdelicten" badge="data" year={geweld.jaar}
+        <Card title="Geweldsdelicten" badge="data" year={geweld.jaar}
           onYearChange={geweldCard.handleYearChange} availableYears={geweldCard.availableYears}
           activeYearMode={geweldCard.activeMode} yearsWithData={geweldCard.yearsWithData}>
           {geweldCard.isLoading ? (
@@ -306,10 +306,10 @@ export function Veiligheid() {
               <MeldingRow label="Moord/doodslag" value={geweld.crim.moordDoodslag} />
             </div>
           )}
-        </SelectableCard>
+        </Card>
 
         {/* Overlast & Overig */}
-        <SelectableCard sectionId="veiligheid-overlast" title="Overlast & Overig" badge="data" year={overlast.jaar}
+        <Card title="Overlast & Overig" badge="data" year={overlast.jaar}
           onYearChange={overlastCard.handleYearChange} availableYears={overlastCard.availableYears}
           activeYearMode={overlastCard.activeMode} yearsWithData={overlastCard.yearsWithData}>
           {overlastCard.isLoading ? (
@@ -328,10 +328,10 @@ export function Veiligheid() {
               <MeldingRow label="Cybercrime" value={overlast.crim.cybercrime} />
             </div>
           )}
-        </SelectableCard>
+        </Card>
 
         {/* Verkeer */}
-        <SelectableCard sectionId="veiligheid-verkeer" title="Verkeer" badge="data" year={verkeer.jaar}
+        <Card title="Verkeer" badge="data" year={verkeer.jaar}
           onYearChange={verkeerCard.handleYearChange} availableYears={verkeerCard.availableYears}
           activeYearMode={verkeerCard.activeMode} yearsWithData={verkeerCard.yearsWithData}>
           {verkeerCard.isLoading ? (
@@ -344,7 +344,7 @@ export function Veiligheid() {
               <MeldingRow label="Rijden onder invloed" value={verkeer.crim.rijdenOnderInvloed} />
             </div>
           )}
-        </SelectableCard>
+        </Card>
       </div>
     </div>
   );

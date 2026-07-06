@@ -85,8 +85,8 @@ interface GebiedStore {
   setIsLoadingData: (loading: boolean) => void;
 
   // Active tabs
-  mainTab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek' | 'presentatie';
-  setMainTab: (tab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek' | 'presentatie') => void;
+  mainTab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek';
+  setMainTab: (tab: 'ruwe-data' | 'wijkronde' | 'nader-onderzoek') => void;
   subTab: string;
   setSubTab: (tab: string) => void;
 
@@ -100,16 +100,6 @@ interface GebiedStore {
   // Nader onderzoek
   actiefTopicId: string | null;
   setActiefTopicId: (id: string | null) => void;
-
-  // Presentatie selecties (per gebiedCode → geordende array van sectionIds)
-  presentatieSelecties: Map<string, string[]>;
-  isSelectieModus: boolean;
-  setSelectieModus: (active: boolean) => void;
-  togglePresentatieSelectie: (gebiedCode: string, sectionId: string) => void;
-  isPresentatieGeselecteerd: (gebiedCode: string, sectionId: string) => boolean;
-  getPresentatieSelecties: (gebiedCode: string) => string[];
-  clearPresentatieSelecties: (gebiedCode: string) => void;
-  movePresentatieSelectie: (gebiedCode: string, sectionId: string, direction: 'up' | 'down') => void;
 
   // Profiel-weergave (los van de gebied-tabs)
   profielOpen: boolean;
@@ -379,13 +369,12 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
   isLoadingData: false,
   setIsLoadingData: (loading) => set({ isLoadingData: loading }),
 
-  mainTab: (loadFromStorage<string>('bp_mainTab') as 'ruwe-data' | 'wijkronde' | 'nader-onderzoek' | 'presentatie') || 'ruwe-data',
+  mainTab: (loadFromStorage<string>('bp_mainTab') as 'ruwe-data' | 'wijkronde' | 'nader-onderzoek') || 'ruwe-data',
   setMainTab: (tab) => {
     const defaultSubTabs: Record<string, string> = {
       'ruwe-data': 'overzicht',
       'wijkronde': 'observaties',
       'nader-onderzoek': '',
-      'presentatie': '',
     };
     const newSubTab = defaultSubTabs[tab] || '';
     saveToStorage('bp_mainTab', tab);
@@ -409,51 +398,6 @@ export const useGebiedStore = create<GebiedStore>((set, get) => ({
 
   actiefTopicId: null,
   setActiefTopicId: (id) => set({ actiefTopicId: id }),
-
-  presentatieSelecties: new Map(
-    Object.entries(
-      loadFromStorage<Record<string, string[]>>('bp_presentatie_all') ?? {}
-    )
-  ),
-  isSelectieModus: false,
-  setSelectieModus: (active) => set({ isSelectieModus: active }),
-  togglePresentatieSelectie: (gebiedCode, sectionId) => {
-    const current = new Map(get().presentatieSelecties);
-    const sectiesVoorGebied = current.get(gebiedCode) ?? [];
-    const idx = sectiesVoorGebied.indexOf(sectionId);
-    const nieuw = idx === -1
-      ? [...sectiesVoorGebied, sectionId]
-      : sectiesVoorGebied.filter((id) => id !== sectionId);
-    if (nieuw.length === 0) {
-      current.delete(gebiedCode);
-    } else {
-      current.set(gebiedCode, nieuw);
-    }
-    saveToStorage('bp_presentatie_all', Object.fromEntries(current));
-    set({ presentatieSelecties: current });
-  },
-  isPresentatieGeselecteerd: (gebiedCode, sectionId) =>
-    (get().presentatieSelecties.get(gebiedCode) ?? []).includes(sectionId),
-  getPresentatieSelecties: (gebiedCode) =>
-    get().presentatieSelecties.get(gebiedCode) ?? [],
-  clearPresentatieSelecties: (gebiedCode) => {
-    const current = new Map(get().presentatieSelecties);
-    current.delete(gebiedCode);
-    saveToStorage('bp_presentatie_all', Object.fromEntries(current));
-    set({ presentatieSelecties: current });
-  },
-  movePresentatieSelectie: (gebiedCode, sectionId, direction) => {
-    const current = new Map(get().presentatieSelecties);
-    const sectiesVoorGebied = [...(current.get(gebiedCode) ?? [])];
-    const idx = sectiesVoorGebied.indexOf(sectionId);
-    if (idx === -1) return;
-    const newIdx = direction === 'up' ? idx - 1 : idx + 1;
-    if (newIdx < 0 || newIdx >= sectiesVoorGebied.length) return;
-    [sectiesVoorGebied[idx], sectiesVoorGebied[newIdx]] = [sectiesVoorGebied[newIdx], sectiesVoorGebied[idx]];
-    current.set(gebiedCode, sectiesVoorGebied);
-    saveToStorage('bp_presentatie_all', Object.fromEntries(current));
-    set({ presentatieSelecties: current });
-  },
 
   profielOpen: false,
   setProfielOpen: (open) => set({ profielOpen: open }),

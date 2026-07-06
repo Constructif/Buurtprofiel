@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
-import { SelectableCard } from '../../ui/SelectableCard';
+import { Card } from '../../ui/Card';
 import { CardTrendChart } from '../../ui/CardTrendChart';
 import { InfoGrid } from '../../ui/InfoGrid';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
@@ -121,7 +121,7 @@ export function Wonen() {
       <TabScoreHeader tabScore={tabScore} />
 
       {/* Woningvoorraad */}
-      <SelectableCard sectionId="wonen-voorraad" title="Woningvoorraad" badge="data" year={voorraad.jaar}
+      <Card title="Woningvoorraad" badge="data" year={voorraad.jaar}
         onYearChange={voorraadCard.handleYearChange} availableYears={voorraadCard.availableYears}
         activeYearMode={voorraadCard.activeMode} yearsWithData={voorraadCard.yearsWithData}>
         {voorraadCard.isLoading ? (
@@ -141,12 +141,12 @@ export function Wonen() {
             ]}
           />
         )}
-      </SelectableCard>
+      </Card>
 
       {/* Charts grid */}
       <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '24px' }}>
         {/* Koop vs Huur */}
-        <SelectableCard sectionId="wonen-koophuur" title="Koop vs Huur" badge="data" year={koopHuur.jaar}
+        <Card title="Koop vs Huur" badge="data" year={koopHuur.jaar}
           onYearChange={koopHuurCard.handleYearChange} availableYears={koopHuurCard.availableYears}
           activeYearMode={koopHuurCard.activeMode} yearsWithData={koopHuurCard.yearsWithData}>
           {koopHuurCard.isLoading ? (
@@ -171,10 +171,10 @@ export function Wonen() {
               </ResponsiveContainer>
             </div>
           )}
-        </SelectableCard>
+        </Card>
 
         {/* Woningtypes */}
-        <SelectableCard sectionId="wonen-woningtypes" title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? gebiedData.kerncijfersJaar : undefined}>
+        <Card title="Woningtypes" badge={hasWoningtypeData ? "data" : "placeholder"} year={hasWoningtypeData ? gebiedData.kerncijfersJaar : undefined}>
           {hasWoningtypeData ? (
             <div style={{ height: '320px' }}>
               <ResponsiveContainer width="100%" height="100%">
@@ -195,11 +195,11 @@ export function Wonen() {
               <p>Geen woningtype data beschikbaar voor dit gebied</p>
             </div>
           )}
-        </SelectableCard>
+        </Card>
       </div>
 
       {/* Huurdetails */}
-      <SelectableCard sectionId="wonen-huurdetail" title="Huurwoningen Detail" badge="data" year={huurDetail.jaar}
+      <Card title="Huurwoningen Detail" badge="data" year={huurDetail.jaar}
         onYearChange={huurDetailCard.handleYearChange} availableYears={huurDetailCard.availableYears}
         activeYearMode={huurDetailCard.activeMode} yearsWithData={huurDetailCard.yearsWithData}>
         {huurDetailCard.isLoading ? (
@@ -218,11 +218,10 @@ export function Wonen() {
             ]}
           />
         )}
-      </SelectableCard>
+      </Card>
 
       {/* Verhuisbewegingen */}
-      <SelectableCard
-        sectionId="wonen-verhuisbewegingen"
+      <Card
         title={`Verhuisbewegingen${gebiedData.gemeenteNaam && selectedGebied?.type !== 'gemeente' ? ` - Gemeente ${gebiedData.gemeenteNaam}` : ''}`}
         badge={hasVerhuisData ? "data" : "placeholder"}
         year={verhuisDataJaar}
@@ -264,14 +263,14 @@ export function Wonen() {
             <p>Geen verhuisdata beschikbaar</p>
           </div>
         )}
-      </SelectableCard>
+      </Card>
 
       {/* Woningcorporaties - placeholder */}
-      <SelectableCard sectionId="wonen-corporaties" title="Woningcorporaties" badge="placeholder">
+      <Card title="Woningcorporaties" badge="placeholder">
         <div style={{ textAlign: 'center', padding: '40px 20px', color: '#9ca3af' }}>
           <p>Nog geen data beschikbaar</p>
         </div>
-      </SelectableCard>
+      </Card>
     </div>
   );
 }

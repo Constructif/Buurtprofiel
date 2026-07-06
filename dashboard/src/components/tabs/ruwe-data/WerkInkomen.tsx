@@ -1,7 +1,6 @@
 import { useCallback } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
-import { SelectableWrapper } from '../../ui/SelectableCard';
 import type { UitkeringenData } from '../../../types/werkInkomen';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenWerkInkomenScore } from '../../../utils/scoring';
@@ -151,7 +150,7 @@ export function WerkInkomen() {
       <AandachtspuntenCard punten={aandachtspunten} benchmarkNaam={benchmarkNaam} />
 
       {/* Inkomen Card */}
-      <SelectableWrapper sectionId="economie-inkomen">
+      <div>
         {inkomenCard.activeMode === 'trend' && inkomenCard.trendData ? (
           <Card title="Inkomen Trend" badge="data" year={jaar}
             onYearChange={inkomenCard.handleYearChange} availableYears={inkomenCard.availableYears}
@@ -178,11 +177,11 @@ export function WerkInkomen() {
             yearsWithData={inkomenCard.yearsWithData}
           />
         )}
-      </SelectableWrapper>
+      </div>
 
       {/* Grid: Opleiding + Werkgelegenheid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
-        <SelectableWrapper sectionId="economie-opleiding">
+        <div>
           <OpleidingsniveauCard
             data={werkInkomen?.opleiding ?? null}
             jaar={jaar}
@@ -193,8 +192,8 @@ export function WerkInkomen() {
             refHoog={ref('opleidingHoog')}
             refNaam={benchmarkNaam}
           />
-        </SelectableWrapper>
-        <SelectableWrapper sectionId="economie-werk">
+        </div>
+        <div>
           <WerkgelegenheidCard
             data={werkInkomen?.werkgelegenheid ?? null}
             gebiedType={selectedGebied.type}
@@ -203,11 +202,11 @@ export function WerkInkomen() {
             refArbeidsparticipatie={ref('arbeidsparticipatie')}
             refNaam={benchmarkNaam}
           />
-        </SelectableWrapper>
+        </div>
       </div>
 
       {/* Uitkeringen */}
-      <SelectableWrapper sectionId="economie-uitkeringen">
+      <div>
         <UitkeringenCard
           data={werkInkomen?.uitkeringen ?? null}
           bevolking={gebiedData.bevolking.totaal}
@@ -222,7 +221,7 @@ export function WerkInkomen() {
           activeYearMode={uitkeringenCard.activeMode}
           yearsWithData={uitkeringenCard.yearsWithData}
         />
-      </SelectableWrapper>
+      </div>
     </div>
   );
 }

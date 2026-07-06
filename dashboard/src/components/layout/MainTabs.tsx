@@ -2,17 +2,12 @@ import { useGebiedStore } from '../../store/gebiedStore';
 import { FavorietButton } from './FavorietButton';
 
 export function MainTabs() {
-  const { mainTab, setMainTab, selectedGebied, getPresentatieSelecties } = useGebiedStore();
-
-  const aantalSelecties = selectedGebied
-    ? getPresentatieSelecties(selectedGebied.code).length
-    : 0;
+  const { mainTab, setMainTab } = useGebiedStore();
 
   const tabs = [
     { id: 'ruwe-data', label: 'Ruwe Data' },
     { id: 'wijkronde', label: 'Wijkronde' },
     { id: 'nader-onderzoek', label: 'Nader Onderzoek' },
-    { id: 'presentatie', label: 'Presentatie', count: aantalSelecties },
   ] as const;
 
   return (
@@ -38,19 +33,6 @@ export function MainTabs() {
             }}
           >
             {tab.label}
-            {'count' in tab && tab.count > 0 && (
-              <span style={{
-                backgroundColor: mainTab === tab.id ? 'rgba(255,255,255,0.3)' : '#eb6608',
-                color: 'white',
-                borderRadius: '10px',
-                fontSize: '11px',
-                fontWeight: 700,
-                padding: '1px 7px',
-                lineHeight: '18px',
-              }}>
-                {tab.count}
-              </span>
-            )}
           </button>
         ))}
       </div>

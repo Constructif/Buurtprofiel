@@ -12,7 +12,6 @@ import {
   type VoorzieningType,
 } from '../../../services/overpass';
 import { Card } from '../../ui/Card';
-import { SelectableWrapper } from '../../ui/SelectableCard';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
 import { berekenVoorzieningenScore } from '../../../utils/scoring';
 import { useActiveBenchmarks } from '../../../hooks/useActiveBenchmarks';
@@ -502,7 +501,7 @@ export function Voorzieningen() {
       </div>
 
       {/* Kaart - Midden (Sticky) */}
-      <SelectableWrapper sectionId="voorzieningen-kaart" style={{
+      <div style={{
         position: isMobile ? 'static' : 'sticky',
         top: '16px',
         height: isMobile ? '400px' : 'calc(100vh - 240px)',
@@ -546,10 +545,10 @@ export function Voorzieningen() {
           />
           <MapController geometry={geometry} voorzieningen={filteredVoorzieningen} selectedVoorzieningId={selectedVoorziening} />
         </MapContainer>
-      </SelectableWrapper>
+      </div>
 
       {/* Details lijst - Rechts (Sticky) */}
-      <SelectableWrapper sectionId="voorzieningen-lijst" style={{
+      <div style={{
         position: isMobile ? 'static' : 'sticky',
         top: '16px',
         height: isMobile ? 'auto' : 'calc(100vh - 240px)',
@@ -695,7 +694,7 @@ export function Voorzieningen() {
             {loading ? 'Voorzieningen laden...' : 'Selecteer voorzieningen om details te zien'}
           </Card>
         )}
-      </SelectableWrapper>
+      </div>
     </div>
     </div>
   );

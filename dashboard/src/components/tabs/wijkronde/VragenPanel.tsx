@@ -6,7 +6,6 @@ import { fetchAntwoorden, upsertAntwoord, vragenOpslaan, vragenHeropenen } from 
 import { logger } from '../../../utils/logger';
 import type { WijkrondeAntwoord } from '../../../types/wijkronde';
 import { VragenOverzicht } from './VragenOverzicht';
-import { SelectableWrapper } from '../../ui/SelectableCard';
 
 const SCORE_LABELS = ['Slecht', 'Matig', 'Voldoende', 'Goed', 'Uitstekend'];
 
@@ -178,9 +177,8 @@ export function VragenPanel() {
   return (
     <div style={{ maxWidth: '700px' }}>
       {Object.entries(categorieGroepen).map(([categorie, vragen]) => (
-        <SelectableWrapper
+        <div
           key={categorie}
-          sectionId={`wijkronde-vragen-${categorie.toLowerCase().replace(/\s+/g, '-')}`}
           style={{ marginBottom: '24px' }}
         >
           <h4 style={{
@@ -426,7 +424,7 @@ export function VragenPanel() {
               )}
             </div>
           ))}
-        </SelectableWrapper>
+        </div>
       ))}
 
       {/* Vragenlijst afsluiten */}

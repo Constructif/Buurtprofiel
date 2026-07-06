@@ -7,7 +7,6 @@ import { loadGebiedData } from './services/cbs';
 import { Overzicht, Bewoners, Wonen, Veiligheid, Voorzieningen, ZorgWelzijn, WerkInkomen, Leefomgeving } from './components/tabs/ruwe-data';
 import { WijkrondeTab } from './components/tabs/wijkronde';
 import { NaderOnderzoekTab } from './components/tabs/nader-onderzoek';
-import { PresentatieTab } from './components/tabs/presentatie';
 import { ProfielTab } from './components/tabs/profiel';
 import { useAuth } from './hooks/useAuth';
 import { logger } from './utils/logger';
@@ -72,9 +71,6 @@ function App() {
     }
     if (mainTab === 'nader-onderzoek') {
       return <NaderOnderzoekTab />;
-    }
-    if (mainTab === 'presentatie') {
-      return <PresentatieTab />;
     }
 
     // Ruwe data tabs

@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
-import { SelectableCard } from '../../ui/SelectableCard';
 import { fetchZorgWelzijnData } from '../../../services/rivm';
 import type { ZorgWelzijnData } from '../../../types/zorgWelzijn';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
@@ -204,8 +203,8 @@ export function ZorgWelzijn() {
       <AandachtspuntenCard punten={aandachtspunten} benchmarkNaam={benchmarkNaam} />
 
       {/* SECTIE 1: Eenzaamheid */}
-      <SelectableCard
-        sectionId="zorg-eenzaamheid"
+      <Card
+
         title="Eenzaamheid"
         badge="data"
         badgeText={badgeConfig.eenzaamheid.badgeText}
@@ -288,13 +287,13 @@ export function ZorgWelzijn() {
             </div>
           )}
         </div>
-      </SelectableCard>
+      </Card>
 
       {/* Trend grafiek en Mentale Gezondheid naast elkaar */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
         {/* Trend grafiek */}
-        <SelectableCard
-          sectionId="zorg-eenzaamheid-trend"
+        <Card
+
           title="Eenzaamheid Trend (2012-2022)"
           badge={trend?.jaren && trend.jaren.length > 0 ? 'data' : 'placeholder'}
           badgeText={badgeConfig.eenzaamheid.badgeText}
@@ -339,11 +338,11 @@ export function ZorgWelzijn() {
               <p>Geen trenddata beschikbaar</p>
             </div>
           )}
-        </SelectableCard>
+        </Card>
 
         {/* SECTIE 2: Mentale Gezondheid met progress bars */}
-        <SelectableCard
-          sectionId="zorg-mentaal"
+        <Card
+
           title="Mentale Gezondheid"
           badge="data"
           badgeText={badgeConfig.mentaleGezondheid.badgeText}
@@ -391,12 +390,12 @@ export function ZorgWelzijn() {
               kpiKey="veerkracht"
             />
           </div>
-        </SelectableCard>
+        </Card>
       </div>
 
       {/* SECTIE 3: Zorg & Ondersteuning */}
-      <SelectableCard
-        sectionId="zorg-ondersteuning"
+      <Card
+
         title="Zorg & Ondersteuning"
         badge="data"
         badgeText={badgeConfig.zorgOndersteuning.badgeText}
@@ -452,7 +451,7 @@ export function ZorgWelzijn() {
             kpiKey="moeiteRondkomen"
           />
         </div>
-      </SelectableCard>
+      </Card>
 
       {/* SECTIE 4: Jeugdzorg & WMO (CBS Kerncijfers) */}
       {gebiedData?.jeugdzorgWmo && (

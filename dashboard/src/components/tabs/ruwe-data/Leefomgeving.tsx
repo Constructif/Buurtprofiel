@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { Card } from '../../ui/Card';
-import { SelectableCard } from '../../ui/SelectableCard';
 import { fetchLeefomgevingData } from '../../../services/leefomgeving';
 import type { LeefomgevingData, LeefomgevingVergelijkingNiveau } from '../../../types/leefomgeving';
 import { TabScoreHeader } from '../../ui/TabScoreHeader';
@@ -168,8 +167,8 @@ export function Leefomgeving() {
       <AandachtspuntenCard punten={aandachtspunten} benchmarkNaam={benchmarkNaam} />
 
       {/* SECTIE 1: Hoofdkader m² groen per persoon */}
-      <SelectableCard
-        sectionId="leefomgeving-groen"
+      <Card
+
         title="Groenvoorzieningen"
         badge="data"
         badgeText={`CBS Bodemgebruik ${dataJaar}${isGemeenteNiveau ? ' (gemeente)' : ''}`}
@@ -257,13 +256,13 @@ export function Leefomgeving() {
             </div>
           )}
         </div>
-      </SelectableCard>
+      </Card>
 
       {/* SECTIE 2: Bodemgebruik verdeling */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: '20px' }}>
         {/* Pie chart */}
-        <SelectableCard
-          sectionId="leefomgeving-bodem-verdeling"
+        <Card
+
           title="Verdeling Groengebieden"
           badge={bodemgebruikData.length > 0 ? 'data' : 'placeholder'}
           badgeText={`CBS ${dataJaar}`}
@@ -300,11 +299,11 @@ export function Leefomgeving() {
               <p>Geen bodemgebruik data beschikbaar</p>
             </div>
           )}
-        </SelectableCard>
+        </Card>
 
         {/* Detail boxes */}
-        <SelectableCard
-          sectionId="leefomgeving-bodem-detail"
+        <Card
+
           title="Groengebieden per Type"
           badge="data"
           badgeText={`CBS ${dataJaar}`}
@@ -331,19 +330,19 @@ export function Leefomgeving() {
               description="Bos, heide, duinen"
             />
           </div>
-        </SelectableCard>
+        </Card>
       </div>
 
       {/* SECTIE 3: Vergelijking bar chart */}
       {vergelijking && (
-        <SelectableCard
-          sectionId="leefomgeving-vergelijking"
+        <Card
+
           title="Vergelijking m² Groen per Inwoner"
           badge="data"
           badgeText={`CBS ${dataJaar}`}
         >
           <VergelijkingChart vergelijking={vergelijking} selectedType={selectedGebied?.type} />
-        </SelectableCard>
+        </Card>
       )}
     </div>
   );

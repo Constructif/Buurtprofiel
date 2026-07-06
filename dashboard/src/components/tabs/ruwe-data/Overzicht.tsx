@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { SelectableWrapper } from '../../ui/SelectableCard';
 import { useGebiedStore } from '../../../store/gebiedStore';
 import { BuurtMap } from '../../maps/BuurtMap';
 import {
@@ -117,12 +116,12 @@ export function Overzicht() {
       <section>
         <div className="overzicht-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: '16px', alignItems: 'stretch' }}>
           {/* Kaart */}
-          <SelectableWrapper sectionId="overzicht-kaart" style={{ borderRadius: '8px', overflow: 'hidden', height: '100%', minHeight: '400px' }}>
+          <div style={{ borderRadius: '8px', overflow: 'hidden', height: '100%', minHeight: '400px' }}>
             <BuurtMap />
-          </SelectableWrapper>
+          </div>
 
           {/* Score Sectie */}
-          <SelectableWrapper sectionId="overzicht-score" style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
             {/* Hoofdscore */}
             <HoofdscoreCard buurtprofiel={buurtprofiel} isLoadingExtra={isLoadingExtra} />
 
@@ -146,7 +145,7 @@ export function Overzicht() {
                 {isLoadingExtra ? 'Zorg & Leefomgeving data laden...' : 'Voorzieningen worden geladen...'}
               </div>
             )}
-          </SelectableWrapper>
+          </div>
         </div>
       </section>
     </div>

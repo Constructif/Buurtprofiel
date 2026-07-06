@@ -76,40 +76,6 @@ function BenchmarkToggle() {
   );
 }
 
-function SelectieModeToggle() {
-  const { isSelectieModus, setSelectieModus, selectedGebied } = useGebiedStore();
-  if (!selectedGebied) return null;
-  return (
-    <button
-      onClick={() => setSelectieModus(!isSelectieModus)}
-      title={isSelectieModus ? 'Selectie modus uitschakelen' : 'Kaarten selecteren voor presentatie'}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '6px',
-        padding: '5px 10px',
-        fontSize: '11px',
-        fontWeight: isSelectieModus ? 600 : 400,
-        border: `1.5px solid ${isSelectieModus ? '#eb6608' : '#d1d5db'}`,
-        borderRadius: '6px',
-        cursor: 'pointer',
-        backgroundColor: isSelectieModus ? '#fff7f0' : 'white',
-        color: isSelectieModus ? '#eb6608' : '#6b7280',
-        whiteSpace: 'nowrap',
-        flexShrink: 0,
-      }}
-    >
-      <svg width="13" height="13" viewBox="0 0 24 24"
-        fill={isSelectieModus ? '#eb6608' : 'none'}
-        stroke={isSelectieModus ? '#eb6608' : '#6b7280'}
-        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-      </svg>
-      {isSelectieModus ? 'Selectie aan' : 'Selecteer'}
-    </button>
-  );
-}
-
 export function SubTabs() {
   const { mainTab, subTab, setSubTab } = useGebiedStore();
 
@@ -182,7 +148,6 @@ export function SubTabs() {
           }}>
             {mainTab === 'ruwe-data' && <BenchmarkToggle />}
             {mainTab === 'ruwe-data' && <YearSelector />}
-            <SelectieModeToggle />
           </div>
         )}
       </div>
@@ -199,7 +164,6 @@ export function SubTabs() {
         }}>
           {mainTab === 'ruwe-data' && <BenchmarkToggle />}
           {mainTab === 'ruwe-data' && <YearSelector />}
-          <SelectieModeToggle />
         </div>
       )}
     </nav>
